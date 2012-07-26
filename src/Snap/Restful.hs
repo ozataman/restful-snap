@@ -20,9 +20,12 @@ module Snap.Restful
     , destroyPath
     , itemActionPath
 
+    , templatePath
+
     , resourceSplices
     , itemSplices
 
+    , redirToItem
     ) where
 
 -------------------------------------------------------------------------------
@@ -104,6 +107,20 @@ mkCrudRoute Resource{..} (crud, h) =
     RUpdate -> ( T.encodeUtf8 $ T.intercalate "/" [rRoot, ":id"], ifTop $ method POST h)
     RDestroy -> ( T.encodeUtf8 $ T.intercalate "/" [rRoot, ":id", "destroy"]
                 , ifTop $ method POST h)
+
+
+-- | Return heist template location for given crud action
+templatePath Resource{..} crud =
+  case crud of
+    RIndex -> B.intercalate "/" [r, "index"]
+    RCreate -> error "Create action does not get a template."
+    RShow -> B.intercalate "/" [r, "show"]
+    RNew -> B.intercalate "/" [r, "new"]
+    REdit -> B.intercalate "/" [r, "edit"]
+    RUpdate -> error "Update action does not get a template."
+    RDestroy -> error "Destroy action does not get a template."
+  where
+    r = T.encodeUtf8 rRoot
 
 
 -------------------------------------------------------------------------------
@@ -199,6 +216,12 @@ mkItemActionSplice
   :: Monad m => Resource b v a -> DBId -> Text -> (Text, Splice m)
 mkItemActionSplice r@Resource{..} dbid t =
   (T.concat [rName, "Item", cap t, "Path"], textSplice $ itemActionPath r t dbid)
+
+
+-------------------------------------------------------------------------------
+-- | Redirect to given item's default show page
+redirToItem :: MonadSnap m => Resource b v a -> DBId -> m a
+redirToItem r dbid = redirect . T.encodeUtf8 $ showPath r dbid
 
 
 -------------------------------------------------------------------------------
