@@ -44,7 +44,20 @@ import           Text.Templating.Heist
 -------------------------------------------------------------------------------
 
 
-data CRUD = RIndex | RCreate | RShow | RNew | REdit | RUpdate | RDestroy
+data CRUD = RIndex
+          -- ^ Gets an item index
+          | RShow
+          -- ^ Gets a single item
+          | RNew
+          -- ^ Get the form for creating a new item
+          | REdit
+          -- ^ Get the form for editing an item
+          | RCreate
+          -- ^ Create a new item
+          | RUpdate
+          -- ^ Update an item
+          | RDestroy
+          -- ^ Delete an item
   deriving (Eq,Show,Read,Ord)
 
 
