@@ -1,5 +1,6 @@
 *.o
 *.hi
+*.swp
 dist/
 cabal-dev/
 *DS*
