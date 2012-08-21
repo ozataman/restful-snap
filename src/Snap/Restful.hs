@@ -6,6 +6,7 @@ module Snap.Restful
     , Resource (..)
     , DBId (..)
 
+    , initRest
     , resourceRouter
     , resourceRoutes
 
@@ -24,6 +25,7 @@ module Snap.Restful
 
     , resourceSplices
     , itemSplices
+    , itemSplices'
 
     , redirToItem
     ) where
@@ -83,6 +85,19 @@ data Resource b v a = Resource {
 
 instance Default (Resource b v a) where
     def = Resource "items" "/items" [] [] []
+
+
+------------------------------------------------------------------------------
+-- | One-stop convenience function to enable RESTful resources in your
+-- application.  Call this function from your initializer passing it all of
+-- your resources and it will add the routes and splices for you.
+initRest :: HasHeist b => [Resource b v ()] -> Initializer b v ()
+initRest resources = do
+    let splices = concatMap resourceSplices resources
+        routes = concatMap resourceRoutes resources
+    addSplices splices
+    addRoutes routes
+
 
 -------------------------------------------------------------------------------
 resourceRoutes :: Resource b v a -> [(ByteString, Handler b v a)]
@@ -196,7 +211,7 @@ rootPath = indexPath
 
 
 -------------------------------------------------------------------------------
-resourceSplices :: Resource b v a -> [(Text, SnapletSplice b b)]
+resourceSplices :: Resource b v a -> [(Text, SnapletSplice b v)]
 resourceSplices r@Resource{..} =
   [ (T.concat [rName, "NewPath"], liftHeist . textSplice $ newPath r def)
   , (T.concat [rName, "IndexPath"], liftHeist . textSplice $ indexPath r def)
