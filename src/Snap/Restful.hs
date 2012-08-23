@@ -170,6 +170,21 @@ itemActionPath Resource{..} t DBId{..} = T.intercalate "/" [rRoot, showT unDBId,
 
 
 -------------------------------------------------------------------------------
+indexPath :: Resource b v a -> Text
+indexPath r = rRoot r
+
+
+-------------------------------------------------------------------------------
+createPath :: Resource b v a -> Text
+createPath r = rRoot r
+
+
+-------------------------------------------------------------------------------
+rootPath :: Resource b v a -> Text
+rootPath = indexPath
+
+
+-------------------------------------------------------------------------------
 editPath :: Resource b v a -> DBId -> Text
 editPath r dbid = crudPath r REdit dbid
 
@@ -190,23 +205,9 @@ destroyPath r dbid = crudPath r RDestroy dbid
 
 
 -------------------------------------------------------------------------------
-indexPath :: Resource b v a -> DBId -> Text
-indexPath r dbid = crudPath r RIndex dbid
-
-
--------------------------------------------------------------------------------
-createPath :: Resource b v a -> DBId -> Text
-createPath r dbid = crudPath r RCreate dbid
-
-
--------------------------------------------------------------------------------
 newPath :: Resource b v a -> DBId -> Text
 newPath r dbid = crudPath r RNew dbid
 
-
--------------------------------------------------------------------------------
-rootPath :: Resource b v a -> DBId -> Text
-rootPath = indexPath
 
 
 
@@ -214,9 +215,9 @@ rootPath = indexPath
 resourceSplices :: Resource b v a -> [(Text, SnapletSplice b v)]
 resourceSplices r@Resource{..} =
   [ (T.concat [rName, "NewPath"], liftHeist . textSplice $ newPath r def)
-  , (T.concat [rName, "IndexPath"], liftHeist . textSplice $ indexPath r def)
-  , (T.concat [rName, "CreatePath"], liftHeist . textSplice $ createPath r def)
-  , (T.concat [rName, "Path"], liftHeist . textSplice $ rootPath r def)
+  , (T.concat [rName, "IndexPath"], liftHeist . textSplice $ indexPath r)
+  , (T.concat [rName, "CreatePath"], liftHeist . textSplice $ createPath r)
+  , (T.concat [rName, "Path"], liftHeist . textSplice $ rootPath r)
   ]
 
 
@@ -229,8 +230,8 @@ itemSplices r@Resource{..} dbid =
   , (T.concat [rName, "ItemUpdatePath"], textSplice $ updatePath r dbid)
   , (T.concat [rName, "ItemDestroyPath"], textSplice $ destroyPath r dbid)
   , (T.concat [rName, "ItemNewPath"], textSplice $ newPath r dbid)
-  , (T.concat [rName, "ItemIndexPath"], textSplice $ indexPath r dbid)
-  , (T.concat [rName, "ItemCreatePath"], textSplice $ createPath r dbid)
+  , (T.concat [rName, "ItemIndexPath"], textSplice $ indexPath r)
+  , (T.concat [rName, "ItemCreatePath"], textSplice $ createPath r)
   ]
 
 
