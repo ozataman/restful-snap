@@ -21,10 +21,18 @@ library
     Snap.Restful
 
   build-depends:       
-      base == 4.5.*
-    , bytestring
-    , data-default
-    , heist
-    , snap-core
-    , snap
-    , text
+    base               >= 4    && < 5,
+    bytestring         >= 0.8  && < 0.10,
+    containers         >= 0.4  && < 0.5,
+    data-default       >= 0.5  && < 0.6,
+    digestive-functors >= 0.5  && < 0.6,
+    ghc-prim           >= 0.2  && < 0.3,
+    heist              >= 0.8  && < 0.9,
+    mtl                >= 2.0  && < 2.1,
+    readable           >= 0.1  && < 0.2,
+    relational         >= 0.0  && < 0.1,
+    snap-core          >= 0.9  && < 0.10,
+    snap               >= 0.9  && < 0.10,
+    text               >= 0.11 && < 0.12
+
+  ghc-options: -Wall -fwarn-tabs
