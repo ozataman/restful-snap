@@ -36,6 +36,9 @@ module Snap.Restful
     , redirToItem
 
     , HasFormlet(..)
+    , validDate
+    , simpleDateFormlet
+
     , HasSplices(..)
     , prefixSplices
     , liftSplices
@@ -47,6 +50,7 @@ module Snap.Restful
 import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad
+import           Control.Monad.Trans
 import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as B
 import           Data.Char             (toUpper)
@@ -57,6 +61,7 @@ import           Data.Readable
 import           Data.Text             (Text)
 import qualified Data.Text             as T
 import qualified Data.Text.Encoding    as T
+import           Data.Time
 import           Data.Typeable
 import           Data.Word
 import           GHC.Generics
@@ -64,6 +69,7 @@ import           Relational.Types
 import           Snap.Core
 import           Snap.Snaplet
 import           Snap.Snaplet.Heist
+import           System.Locale
 import           Text.Digestive
 import           Text.Templating.Heist
 ------------------------------------------------------------------------------
@@ -105,6 +111,19 @@ instance HasFormlet FK32 where
 instance HasFormlet FK64 where
     formlet d = FK64 <$> stringRead "must be a foreign key" (unFK64 <$> d)
 
+validDate :: Text -> Result Text Day
+validDate = maybe (Error "invalid date") Success .
+              parseTime defaultTimeLocale "%F" . T.unpack
+
+dayText :: Day -> Text
+dayText = T.pack . formatTime defaultTimeLocale "%F" 
+
+------------------------------------------------------------------------------
+-- | A simple formlet for dates that 
+simpleDateFormlet :: (Monad m)
+                  => Maybe Day -> Form Text m Day
+simpleDateFormlet d = validate validDate $
+    text (dayText <$> d)
 
 ------------------------------------------------------------------------------
 -- | Type class for uniform creation of splices.  For primitives that don't
@@ -152,6 +171,9 @@ instance HasSplices FK32 where
     splices = splices . unFK32
 instance HasSplices FK64 where
     splices = splices . unFK64
+
+instance HasSplices Day where
+    splices = splices . dayText
 
 instance HasSplices a => HasSplices (Maybe a) where
     splices Nothing  = [("", textSplice "")]
