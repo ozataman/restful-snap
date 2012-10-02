@@ -31,7 +31,6 @@ module Snap.Restful
 
     , resourceSplices
     , itemSplices
-    , itemSplices'
 
     , redirToItem
 
@@ -41,7 +40,6 @@ module Snap.Restful
 
     , HasSplices(..)
     , prefixSplices
-    , liftSplices
 
     , relativeRedirect
     ) where
@@ -71,7 +69,8 @@ import           Snap.Snaplet
 import           Snap.Snaplet.Heist
 import           System.Locale
 import           Text.Digestive
-import           Text.Templating.Heist
+import           Heist
+import           Heist.Interpreted
 ------------------------------------------------------------------------------
 
 
@@ -178,11 +177,6 @@ instance HasSplices Day where
 instance HasSplices a => HasSplices (Maybe a) where
     splices Nothing  = [("", textSplice "")]
     splices (Just x) = splices x
-
-
-liftSplices :: [(Text, HeistT (Handler b b) a)]
-            -> [(Text, SnapletHeist b v a)]
-liftSplices = map (second liftHeist)
 
 
 ------------------------------------------------------------------------------
@@ -376,12 +370,12 @@ destroyPath r (DBId _id) = T.intercalate "/" [rRoot r, showT _id, "destroy"]
 
 
 ------------------------------------------------------------------------------
-resourceSplices :: Resource b v a -> [(Text, SnapletSplice b v)]
+resourceSplices :: Resource b v a -> [(Text, SnapletISplice b)]
 resourceSplices r@Resource{..} =
-  [ (T.concat [rName, "NewPath"], liftHeist . textSplice $ newPath r)
-  , (T.concat [rName, "IndexPath"], liftHeist . textSplice $ indexPath r)
-  , (T.concat [rName, "CreatePath"], liftHeist . textSplice $ createPath r)
-  , (T.concat [rName, "Path"], liftHeist . textSplice $ rootPath r)
+  [ (T.concat [rName, "NewPath"], textSplice $ newPath r)
+  , (T.concat [rName, "IndexPath"], textSplice $ indexPath r)
+  , (T.concat [rName, "CreatePath"], textSplice $ createPath r)
+  , (T.concat [rName, "Path"], textSplice $ rootPath r)
 
   -- This splice is designed to be used in create and update forms to specify
   -- the correct action URL.
@@ -394,8 +388,8 @@ setFormAction a = localRequest f
                                       (rqParams req) }
 
 getFormAction = do
-    p <- liftHandler $ getParam "RESTFormAction"
-    maybe (return []) (liftHeist . textSplice . T.decodeUtf8) p
+    p <- lift $ getParam "RESTFormAction"
+    maybe (return []) (textSplice . T.decodeUtf8) p
 
 
 ------------------------------------------------------------------------------
@@ -410,11 +404,6 @@ itemSplices r@Resource{..} dbid =
   , (T.concat [rName, "ItemIndexPath"], textSplice $ indexPath r)
   , (T.concat [rName, "ItemCreatePath"], textSplice $ createPath r)
   ]
-
-
-------------------------------------------------------------------------------
-itemSplices':: Resource b v a -> DBId -> [(Text, SnapletSplice b v)]
-itemSplices' r = map (second liftHeist) . itemSplices r
 
 
 ------------------------------------------------------------------------------
