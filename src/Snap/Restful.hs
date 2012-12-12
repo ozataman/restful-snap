@@ -40,7 +40,8 @@ import qualified Data.Text.Encoding    as T
 import           Snap.Core
 import           Snap.Snaplet
 import           Snap.Snaplet.Heist
-import           Text.Templating.Heist
+import           Heist
+import           Heist.Interpreted
 -------------------------------------------------------------------------------
 
 
@@ -183,12 +184,12 @@ rootPath = indexPath
 
 
 -------------------------------------------------------------------------------
-resourceSplices :: Resource b v a -> [(Text, SnapletSplice b b)]
+resourceSplices :: Resource b v a -> [(Text, SnapletISplice b)]
 resourceSplices r@Resource{..} =
-  [ (T.concat [rName, "NewPath"], liftHeist . textSplice $ newPath r def)
-  , (T.concat [rName, "IndexPath"], liftHeist . textSplice $ indexPath r def)
-  , (T.concat [rName, "CreatePath"], liftHeist . textSplice $ createPath r def)
-  , (T.concat [rName, "Path"], liftHeist . textSplice $ rootPath r def)
+  [ (T.concat [rName, "NewPath"], textSplice $ newPath r def)
+  , (T.concat [rName, "IndexPath"], textSplice $ indexPath r def)
+  , (T.concat [rName, "CreatePath"], textSplice $ createPath r def)
+  , (T.concat [rName, "Path"], textSplice $ rootPath r def)
   ]
 
 
@@ -204,11 +205,6 @@ itemSplices r@Resource{..} dbid =
   , (T.concat [rName, "ItemIndexPath"], textSplice $ indexPath r dbid)
   , (T.concat [rName, "ItemCreatePath"], textSplice $ createPath r dbid)
   ]
-
-
--------------------------------------------------------------------------------
-itemSplices':: Resource b v a -> DBId -> [(Text, SnapletSplice b v)]
-itemSplices' r = map (second liftHeist) . itemSplices r
 
 
 -------------------------------------------------------------------------------
