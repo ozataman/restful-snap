@@ -20,12 +20,39 @@ import           Text.Digestive
 
 
 ------------------------------------------------------------------------------
+-- | Gets a list of constructors for a Name.
+nameCons :: Name -> Q [Con]
+nameCons n = do
+    info <- reify n
+    case info of
+      TyConI dec -> decCons dec
+      _ -> return []
+
+
+------------------------------------------------------------------------------
+-- | Gets a list of constructors for a Dec.
+decCons :: Dec -> Q [Con]
+decCons (DataD _ _ _ cons _) = return cons
+decCons (NewtypeD _ _ _ con _) = return [con]
+decCons (TySynD _ _ t) = typeCons t
+decCons _ = return []
+
+
+------------------------------------------------------------------------------
+-- | Gets a list of constructors for a Type.
+typeCons :: Type -> Q [Con]
+typeCons (AppT a _) = typeCons a
+typeCons (ConT n) = nameCons n
+typeCons _ = return []
+
+
+------------------------------------------------------------------------------
 -- | Derives a HasFormlet instance for a data type.
 deriveHasFormlet :: Name -> Q [Dec]
 deriveHasFormlet n = do
-    info <- reify n
-    case info of
-      (TyConI (DataD _ typeName _ [RecC conName fields] names)) -> do
+    cons <- nameCons n
+    case cons of
+      [RecC conName fields] -> do
         defName <- newName "d"
         let fieldFormlet (fn,_,_) = do
               let name = litE $ StringL $ nameBase fn
@@ -48,12 +75,12 @@ deriveHasFormlet n = do
 -- > fooSplices = $(iSplices ''Foo)
 iSplices :: Name -> Q Exp
 iSplices n = do
-    info <- reify n
-    case info of
-      (TyConI (DataD _ typeName _ [RecC conName fields] names)) -> do
+    cons <- nameCons n
+    case cons of
+      [RecC conName fields] -> do
         let fieldToTuple (fn,_,_) = do
               f <- [| iPrimSplice . $(varE fn) |]
-              return $ TupE [LitE $ StringL $ nameBase conName ++ ":" ++ nameBase fn,f]
+              return $ TupE [LitE $ StringL $ nameBase fn, f]
         fs <- mapM fieldToTuple fields
         return $ ListE fs
       _ -> error "You can only generate splices for a data type with a single constructor and named record fields"
@@ -68,12 +95,12 @@ iSplices n = do
 -- > fooSplices = $(cSplices ''Foo)
 cSplices :: Name -> Q Exp
 cSplices n = do
-    info <- reify n
-    case info of
-      (TyConI (DataD _ typeName _ [RecC conName fields] names)) -> do
+    cons <- nameCons n
+    case cons of
+      [RecC conName fields] -> do
         let fieldToTuple (fn,_,_) = do
               f <- [| cPrimSplice . $(varE fn) |]
-              return $ TupE [LitE $ StringL $ nameBase conName ++ ":" ++ nameBase fn,f]
+              return $ TupE [LitE $ StringL $ nameBase fn, f]
         fs <- mapM fieldToTuple fields
         return $ ListE fs
       _ -> error "You can only generate splices for a data type with a single constructor and named record fields"

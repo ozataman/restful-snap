@@ -434,6 +434,8 @@ iPrimText t = [X.TextNode t]
 iPrimShow :: Show a => a -> [X.Node]
 iPrimShow = iPrimText . T.pack . show
 
+cPrimShow x = Build.fromString $ show x
+
 instance PrimSplice String where
     iPrimSplice x = iPrimText $ T.pack x
     cPrimSplice x = Build.fromText $ T.pack x
@@ -442,49 +444,52 @@ instance PrimSplice Text where
     cPrimSplice x = Build.fromText x
 instance PrimSplice Int where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 instance PrimSplice Integer where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 instance PrimSplice Float where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 instance PrimSplice Double where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 instance PrimSplice Bool where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 
 instance PrimSplice Int8 where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 instance PrimSplice Int16 where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 instance PrimSplice Int32 where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 instance PrimSplice Int64 where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 
 instance PrimSplice Word8 where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 instance PrimSplice Word16 where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 instance PrimSplice Word32 where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 instance PrimSplice Word64 where
     iPrimSplice x = iPrimShow x
-    cPrimSplice x = Build.fromText $ T.pack $ show x
+    cPrimSplice = cPrimShow
 
 instance PrimSplice Day where
     iPrimSplice = iPrimSplice . dayText
     cPrimSplice = cPrimSplice . dayText
+instance PrimSplice UTCTime where
+    iPrimSplice = iPrimShow
+    cPrimSplice = cPrimShow
 
 instance PrimSplice a => PrimSplice (Maybe a) where
     iPrimSplice Nothing  = iPrimText ""
