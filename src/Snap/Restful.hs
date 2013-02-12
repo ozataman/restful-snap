@@ -5,12 +5,15 @@
 {-# LANGUAGE NoMonomorphismRestriction  #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE TypeSynonymInstances       #-}
 
 module Snap.Restful
     ( CRUD (..)
     , Resource (..)
     , DBId (..)
+    , HasFormlet (..)
+    , PrimSplice (..)
 
     , initRest
     , resourceRouter
@@ -39,11 +42,17 @@ module Snap.Restful
     , prefixSplices
 
     , relativeRedirect
+
+    , setFormAction
+    , getFormAction
+
+    , simpleDateFormlet
     ) where
 
 ------------------------------------------------------------------------------
+import           Blaze.ByteString.Builder
+import qualified Blaze.ByteString.Builder.Char8 as Build
 import           Control.Applicative
-import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Trans
 import           Data.ByteString.Char8 (ByteString)
@@ -52,6 +61,7 @@ import           Data.Char             (toUpper)
 import           Data.Default
 import           Data.Int
 import qualified Data.Map              as M
+import           Data.Monoid
 import           Data.Readable
 import           Data.Text             (Text)
 import qualified Data.Text             as T
@@ -67,114 +77,9 @@ import           Snap.Core
 import           Snap.Snaplet
 import           Snap.Snaplet.Heist
 import           System.Locale
-import           Text.Digestive
 import qualified Text.XmlHtml as X
+import           Text.Digestive
 ------------------------------------------------------------------------------
-
-
--- class HasFormlet a where
---     formlet :: Monad m => Formlet Text m a
--- 
--- instance HasFormlet String where formlet = string
--- instance HasFormlet Text where formlet = text
--- instance HasFormlet Int where formlet = stringRead "must be an integer"
--- instance HasFormlet Integer where formlet = stringRead "must be an integer"
--- instance HasFormlet Float where formlet = stringRead "must be a float"
--- instance HasFormlet Double where formlet = stringRead "must be a double"
--- 
--- instance HasFormlet Int8 where
---     formlet = stringRead "must be an integer"
--- instance HasFormlet Int16 where
---     formlet = stringRead "must be an integer"
--- instance HasFormlet Int32 where
---     formlet = stringRead "must be an integer"
--- instance HasFormlet Int64 where
---     formlet = stringRead "must be an integer"
--- instance HasFormlet Word8 where
---     formlet = stringRead "must be a positive integer"
--- instance HasFormlet Word16 where
---     formlet = stringRead "must be a positive integer"
--- instance HasFormlet Word32 where
---     formlet = stringRead "must be a positive integer"
--- instance HasFormlet Word64 where
---     formlet = stringRead "must be a positive integer"
--- 
--- instance HasFormlet PK32 where
---     formlet d = PK32 <$> stringRead "must be a primary key" (unPK32 <$> d)
--- instance HasFormlet PK64 where
---     formlet d = PK64 <$> stringRead "must be a primary key" (unPK64 <$> d)
--- instance HasFormlet FK32 where
---     formlet d = FK32 <$> stringRead "must be a foreign key" (unFK32 <$> d)
--- instance HasFormlet FK64 where
---     formlet d = FK64 <$> stringRead "must be a foreign key" (unFK64 <$> d)
--- 
--- validDate :: Text -> Result Text Day
--- validDate = maybe (Error "invalid date") Success .
---               parseTime defaultTimeLocale "%F" . T.unpack
--- 
--- dayText :: Day -> Text
--- dayText = T.pack . formatTime defaultTimeLocale "%F" 
--- 
--- ------------------------------------------------------------------------------
--- -- | A simple formlet for dates that 
--- simpleDateFormlet :: (Monad m)
---                   => Maybe Day -> Form Text m Day
--- simpleDateFormlet d = validate validDate $
---     text (dayText <$> d)
--- 
--- ------------------------------------------------------------------------------
--- -- | Type class for uniform creation of splices.  For primitives that don't
--- -- have field names the splices should be a list with one element and an empty
--- -- string for the tag name.
--- class HasISplices a where
---     splices :: (Monad m) => a -> [(Text, Splice m)]
--- 
--- instance HasISplices String where
---     splices x = [("", textSplice $ T.pack x)]
--- instance HasISplices Text where
---     splices x = [("", textSplice x)]
--- instance HasISplices Int where
---     splices x = [("", textSplice $ T.pack $ show x)]
--- instance HasISplices Integer where
---     splices x = [("", textSplice $ T.pack $ show x)]
--- instance HasISplices Float where
---     splices x = [("", textSplice $ T.pack $ show x)]
--- instance HasISplices Double where
---     splices x = [("", textSplice $ T.pack $ show x)]
--- 
--- instance HasISplices Int8 where
---     splices x = [("", textSplice $ T.pack $ show x)]
--- instance HasISplices Int16 where
---     splices x = [("", textSplice $ T.pack $ show x)]
--- instance HasISplices Int32 where
---     splices x = [("", textSplice $ T.pack $ show x)]
--- instance HasISplices Int64 where
---     splices x = [("", textSplice $ T.pack $ show x)]
--- 
--- instance HasISplices Word8 where
---     splices x = [("", textSplice $ T.pack $ show x)]
--- instance HasISplices Word16 where
---     splices x = [("", textSplice $ T.pack $ show x)]
--- instance HasISplices Word32 where
---     splices x = [("", textSplice $ T.pack $ show x)]
--- instance HasISplices Word64 where
---     splices x = [("", textSplice $ T.pack $ show x)]
--- 
--- instance HasISplices PK32 where
---     splices = splices . unPK32
--- instance HasISplices PK64 where
---     splices = splices . unPK64
--- instance HasISplices FK32 where
---     splices = splices . unFK32
--- instance HasISplices FK64 where
---     splices = splices . unFK64
--- 
--- instance HasISplices Day where
---     splices = splices . dayText
--- 
--- instance HasISplices a => HasISplices (Maybe a) where
---     splices Nothing  = [("", textSplice "")]
---     splices (Just x) = splices x
 
 
 ------------------------------------------------------------------------------
@@ -259,11 +164,13 @@ resourceRouter = route . resourceRoutes
 
 
 ------------------------------------------------------------------------------
+mkItemRoute :: Resource t t1 t2 -> (Text, t3) -> (ByteString, t3)
 mkItemRoute Resource{..} (act, h) =
   (T.encodeUtf8 $ T.intercalate "/" [rRoot, ":id", act], h)
 
 
 ------------------------------------------------------------------------------
+mkResourceRoute :: Resource t t1 t2 -> (Text, t3) -> (ByteString, t3)
 mkResourceRoute Resource{..} (act, h) =
   (T.encodeUtf8 $ T.intercalate "/" [rRoot, act], h)
 
@@ -287,14 +194,15 @@ mkCrudRoute r@Resource{..} (crud, h) =
       RDestroy -> ( T.encodeUtf8 $ T.intercalate "/" [rRoot, ":id", "destroy"]
                   , ifTop $ method POST h)
   where
-    setCreateAction h = setFormAction (createPath r) h
-    setEditAction h = do
+    setCreateAction h2 = setFormAction (createPath r) h2
+    setEditAction h2 = do
         _id <- getParam "id"
-        maybe h (\i -> setFormAction (updatePath r (DBId i)) h) (fromBS =<<_id)
+        maybe h2 (\i -> setFormAction (updatePath r (DBId i)) h2) (fromBS =<<_id)
 
 
 ------------------------------------------------------------------------------
 -- | Return heist template location for given crud action
+templatePath :: Resource t t1 t2 -> CRUD -> ByteString
 templatePath Resource{..} crud =
     case crud of
       RIndex -> B.intercalate "/" [r, "index"]
@@ -323,6 +231,7 @@ templatePath Resource{..} crud =
 
 
 ------------------------------------------------------------------------------
+itemActionPath :: Resource t t1 t2 -> Text -> DBId -> Text
 itemActionPath Resource{..} t DBId{..} =
     T.intercalate "/" [rRoot, showT unDBId, t]
 
@@ -367,11 +276,13 @@ destroyPath :: Resource b v a -> DBId -> Text
 destroyPath r (DBId _id) = T.intercalate "/" [rRoot r, showT _id, "destroy"]
 
 
+setFormAction :: MonadSnap m => Text -> m a -> m a
 setFormAction a = localRequest f
   where
     f req = req { rqParams = M.insert "RESTFormAction" [T.encodeUtf8 a]
                                       (rqParams req) }
 
+getFormAction :: MonadSnap m => HeistT n m [X.Node]
 getFormAction = do
     p <- lift $ getParam "RESTFormAction"
     maybe (return []) (I.textSplice . T.decodeUtf8) p
@@ -453,6 +364,7 @@ showT = T.pack . show
 
 
 ------------------------------------------------------------------------------
+cap :: Text -> Text
 cap t =
   case T.uncons t of
     Just (h, rest) -> T.cons (toUpper h) rest
@@ -463,5 +375,168 @@ relativeRedirect :: MonadSnap m => B.ByteString -> m b
 relativeRedirect _path = do
     root <- withRequest (return . rqContextPath)
     redirect $ root `B.append` _path
+
+
+------------------------------------------------------------------------------
+class HasFormlet a where
+    formlet :: Monad m => Formlet Text m a
+
+instance HasFormlet String where formlet = string
+instance HasFormlet Text where formlet = text
+instance HasFormlet Int where formlet = stringRead "must be an integer"
+instance HasFormlet Integer where formlet = stringRead "must be an integer"
+instance HasFormlet Float where formlet = stringRead "must be a float"
+instance HasFormlet Double where formlet = stringRead "must be a double"
+instance HasFormlet Bool where formlet = bool
+
+instance HasFormlet Int8 where
+    formlet = stringRead "must be an integer"
+instance HasFormlet Int16 where
+    formlet = stringRead "must be an integer"
+instance HasFormlet Int32 where
+    formlet = stringRead "must be an integer"
+instance HasFormlet Int64 where
+    formlet = stringRead "must be an integer"
+instance HasFormlet Word8 where
+    formlet = stringRead "must be a positive integer"
+instance HasFormlet Word16 where
+    formlet = stringRead "must be a positive integer"
+instance HasFormlet Word32 where
+    formlet = stringRead "must be a positive integer"
+instance HasFormlet Word64 where
+    formlet = stringRead "must be a positive integer"
+
+validDate :: Text -> Result Text Day
+validDate = maybe (Error "invalid date") Success .
+              parseTime defaultTimeLocale "%F" . T.unpack
+
+
+dayText :: Day -> Text
+dayText = T.pack . formatTime defaultTimeLocale "%F" 
+
+
+------------------------------------------------------------------------------
+-- | A simple formlet for dates that 
+simpleDateFormlet :: (Monad m)
+                  => Maybe Day -> Form Text m Day
+simpleDateFormlet d = validate validDate $
+    text (dayText <$> d)
+
+
+------------------------------------------------------------------------------
+-- | 
+class PrimSplice a where
+    iPrimSplice :: a -> [X.Node]
+    cPrimSplice :: a -> Builder
+
+iPrimText :: Text -> [X.Node]
+iPrimText t = [X.TextNode t]
+iPrimShow :: Show a => a -> [X.Node]
+iPrimShow = iPrimText . T.pack . show
+
+instance PrimSplice String where
+    iPrimSplice x = iPrimText $ T.pack x
+    cPrimSplice x = Build.fromText $ T.pack x
+instance PrimSplice Text where
+    iPrimSplice x = iPrimText x
+    cPrimSplice x = Build.fromText x
+instance PrimSplice Int where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+instance PrimSplice Integer where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+instance PrimSplice Float where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+instance PrimSplice Double where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+instance PrimSplice Bool where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+
+instance PrimSplice Int8 where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+instance PrimSplice Int16 where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+instance PrimSplice Int32 where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+instance PrimSplice Int64 where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+
+instance PrimSplice Word8 where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+instance PrimSplice Word16 where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+instance PrimSplice Word32 where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+instance PrimSplice Word64 where
+    iPrimSplice x = iPrimShow x
+    cPrimSplice x = Build.fromText $ T.pack $ show x
+
+instance PrimSplice Day where
+    iPrimSplice = iPrimSplice . dayText
+    cPrimSplice = cPrimSplice . dayText
+
+instance PrimSplice a => PrimSplice (Maybe a) where
+    iPrimSplice Nothing  = iPrimText ""
+    iPrimSplice (Just x) = iPrimSplice x
+    cPrimSplice Nothing  = mempty
+    cPrimSplice (Just x) = cPrimSplice x
+
+
+------------------------------------------------------------------------------
+-- | Type class for uniform creation of splices.  For primitives that don't
+-- have field names the splices should be a list with one element and an empty
+-- string for the tag name.
+-- class HasSplices a where
+--     iSplices :: (Monad m) => a -> [(Text, I.Splice m)]
+-- --    cSplices :: (Monad m) => [(Text, C.Promise a -> C.Splice m)]
+-- 
+-- instance HasSplices String where
+--     iSplices x = [("", I.textSplice $ T.pack x)]
+-- instance HasSplices Text where
+--     iSplices x = [("", I.textSplice x)]
+-- instance HasSplices Int where
+--     iSplices x = [("", I.textSplice $ T.pack $ show x)]
+-- instance HasSplices Integer where
+--     iSplices x = [("", I.textSplice $ T.pack $ show x)]
+-- instance HasSplices Float where
+--     iSplices x = [("", I.textSplice $ T.pack $ show x)]
+-- instance HasSplices Double where
+--     iSplices x = [("", I.textSplice $ T.pack $ show x)]
+-- 
+-- instance HasSplices Int8 where
+--     iSplices x = [("", I.textSplice $ T.pack $ show x)]
+-- instance HasSplices Int16 where
+--     iSplices x = [("", I.textSplice $ T.pack $ show x)]
+-- instance HasSplices Int32 where
+--     iSplices x = [("", I.textSplice $ T.pack $ show x)]
+-- instance HasSplices Int64 where
+--     iSplices x = [("", I.textSplice $ T.pack $ show x)]
+-- 
+-- instance HasSplices Word8 where
+--     iSplices x = [("", I.textSplice $ T.pack $ show x)]
+-- instance HasSplices Word16 where
+--     iSplices x = [("", I.textSplice $ T.pack $ show x)]
+-- instance HasSplices Word32 where
+--     iSplices x = [("", I.textSplice $ T.pack $ show x)]
+-- instance HasSplices Word64 where
+--     iSplices x = [("", I.textSplice $ T.pack $ show x)]
+-- 
+-- instance HasSplices Day where
+--     iSplices = iSplices . dayText
+-- 
+-- instance HasSplices a => HasSplices (Maybe a) where
+--     iSplices Nothing  = [("", I.textSplice "")]
+--     iSplices (Just x) = iSplices x
 
 
