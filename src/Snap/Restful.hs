@@ -14,6 +14,10 @@ module Snap.Restful
     , DBId (..)
     , HasFormlet (..)
     , PrimSplice (..)
+    , iPrimText
+    , iPrimShow
+    , cPrimShow
+
 
     , initRest
     , resourceRouter
@@ -434,6 +438,7 @@ iPrimText t = [X.TextNode t]
 iPrimShow :: Show a => a -> [X.Node]
 iPrimShow = iPrimText . T.pack . show
 
+cPrimShow :: Show a => a -> Builder
 cPrimShow x = Build.fromString $ show x
 
 instance PrimSplice String where
