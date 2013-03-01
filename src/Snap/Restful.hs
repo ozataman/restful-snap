@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable         #-}
-{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NoMonomorphismRestriction  #-}
@@ -73,7 +72,6 @@ import qualified Data.Text.Encoding    as T
 import           Data.Time
 import           Data.Typeable
 import           Data.Word
-import           GHC.Generics
 import           Heist
 import qualified Heist.Compiled as C
 import qualified Heist.Interpreted as I
@@ -116,7 +114,7 @@ data CRUD = RIndex
 
 
 newtype DBId = DBId { unDBId :: Word64 }
-    deriving (Eq,Show,Read,Ord,Num,Generic,Typeable)
+    deriving (Eq,Show,Read,Ord,Num,Typeable)
 
 
 instance Default DBId where
@@ -430,12 +428,12 @@ simpleDateFormlet d = validate validDate $
 ------------------------------------------------------------------------------
 -- | 
 class PrimSplice a where
-    iPrimSplice :: a -> [X.Node]
+    iPrimSplice :: Monad m => a -> m [X.Node]
     cPrimSplice :: a -> Builder
 
-iPrimText :: Text -> [X.Node]
-iPrimText t = [X.TextNode t]
-iPrimShow :: Show a => a -> [X.Node]
+iPrimText :: Monad m => Text -> m [X.Node]
+iPrimText t = return [X.TextNode t]
+iPrimShow :: (Monad m, Show a) => a -> m [X.Node]
 iPrimShow = iPrimText . T.pack . show
 
 cPrimShow :: Show a => a -> Builder
