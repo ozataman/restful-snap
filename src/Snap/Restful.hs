@@ -302,7 +302,7 @@ resourceSplices r@Resource{..} =
 
   -- This splice is designed to be used in create and update forms to specify
   -- the correct action URL.
-  , ("RESTFormAction", undefined)
+  --, ("RESTFormAction", undefined)
   ]
 
 ------------------------------------------------------------------------------
