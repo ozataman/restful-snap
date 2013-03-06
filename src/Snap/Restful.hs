@@ -165,16 +165,19 @@ resourceRouter :: Resource b v a -> Handler b v a
 resourceRouter = route . resourceRoutes
 
 
+mkPath = T.intercalate "/" . filter (not . T.null)
+mkPathB = B.intercalate "/" . filter (not . B.null)
+
 ------------------------------------------------------------------------------
 mkItemRoute :: Resource t t1 t2 -> (Text, t3) -> (ByteString, t3)
 mkItemRoute Resource{..} (act, h) =
-  (T.encodeUtf8 $ T.intercalate "/" [rRoot, ":id", act], h)
+  (T.encodeUtf8 $ mkPath [rRoot, ":id", act], h)
 
 
 ------------------------------------------------------------------------------
 mkResourceRoute :: Resource t t1 t2 -> (Text, t3) -> (ByteString, t3)
 mkResourceRoute Resource{..} (act, h) =
-  (T.encodeUtf8 $ T.intercalate "/" [rRoot, act], h)
+  (T.encodeUtf8 $ mkPath [rRoot, act], h)
 
 
 ------------------------------------------------------------------------------
@@ -185,15 +188,15 @@ mkCrudRoute r@Resource{..} (crud, h) =
       RIndex -> (T.encodeUtf8 rRoot, ifTop $ method GET h)
       RCreate -> ( T.encodeUtf8 rRoot
                  , ifTop $ method POST (setCreateAction h))
-      RShow -> ( T.encodeUtf8 $ T.intercalate "/" [rRoot, ":id"]
+      RShow -> ( T.encodeUtf8 $ mkPath [rRoot, ":id"]
                , ifTop $ method GET h)
-      RNew -> ( T.encodeUtf8 $ T.intercalate "/" [rRoot, "new"]
+      RNew -> ( T.encodeUtf8 $ mkPath [rRoot, "new"]
               , ifTop $ method GET (setCreateAction h))
-      REdit -> ( T.encodeUtf8 $ T.intercalate "/" [rRoot, ":id", "edit"]
+      REdit -> ( T.encodeUtf8 $ mkPath [rRoot, ":id", "edit"]
                , ifTop $ method GET (setEditAction h))
-      RUpdate -> ( T.encodeUtf8 $ T.intercalate "/" [rRoot, ":id"]
+      RUpdate -> ( T.encodeUtf8 $ mkPath [rRoot, ":id"]
                  , ifTop $ method POST (setEditAction h))
-      RDestroy -> ( T.encodeUtf8 $ T.intercalate "/" [rRoot, ":id", "destroy"]
+      RDestroy -> ( T.encodeUtf8 $ mkPath [rRoot, ":id", "destroy"]
                   , ifTop $ method POST h)
   where
     setCreateAction h2 = setFormAction (createPath r) h2
@@ -207,11 +210,11 @@ mkCrudRoute r@Resource{..} (crud, h) =
 templatePath :: Resource t t1 t2 -> CRUD -> ByteString
 templatePath Resource{..} crud =
     case crud of
-      RIndex -> B.intercalate "/" [r, "index"]
+      RIndex -> mkPathB [r, "index"]
       RCreate -> error "Create action does not get a template."
-      RShow -> B.intercalate "/" [r, "show"]
-      RNew -> B.intercalate "/" [r, "new"]
-      REdit -> B.intercalate "/" [r, "edit"]
+      RShow -> mkPathB [r, "show"]
+      RNew -> mkPathB [r, "new"]
+      REdit -> mkPathB [r, "edit"]
       RUpdate -> error "Update action does not get a template."
       RDestroy -> error "Destroy action does not get a template."
   where
@@ -224,18 +227,18 @@ templatePath Resource{..} crud =
 --  case crud of
 --    RIndex -> rRoot
 --    RCreate -> rRoot
---    RShow -> T.intercalate "/" [rRoot, showT unDBId]
---    RNew -> T.intercalate "/" [rRoot, "new"]
---    REdit -> T.intercalate "/" [rRoot, showT unDBId, "edit"]
---    RUpdate -> T.intercalate "/" [rRoot, showT unDBId]
---    RDestroy -> T.intercalate "/" [rRoot, showT unDBId, "destroy"]
+--    RShow -> mkPath [rRoot, showT unDBId]
+--    RNew -> mkPath [rRoot, "new"]
+--    REdit -> mkPath [rRoot, showT unDBId, "edit"]
+--    RUpdate -> mkPath [rRoot, showT unDBId]
+--    RDestroy -> mkPath [rRoot, showT unDBId, "destroy"]
 --    x -> error $ "Unimplemented crudpath " ++ show x
 
 
 ------------------------------------------------------------------------------
 itemActionPath :: Resource t t1 t2 -> Text -> DBId -> Text
 itemActionPath Resource{..} t DBId{..} =
-    T.intercalate "/" [rRoot, showT unDBId, t]
+    mkPath [rRoot, showT unDBId, t]
 
 
 ------------------------------------------------------------------------------
@@ -250,7 +253,7 @@ createPath r = rRoot r
 
 ------------------------------------------------------------------------------
 newPath :: Resource b v a -> Text
-newPath r = T.intercalate "/" [rRoot r, "new"]
+newPath r = mkPath [rRoot r, "new"]
 
 
 ------------------------------------------------------------------------------
@@ -260,22 +263,22 @@ rootPath = indexPath
 
 ------------------------------------------------------------------------------
 editPath :: Resource b v a -> DBId -> Text
-editPath r (DBId _id) = T.intercalate "/" [rRoot r, showT _id, "edit"]
+editPath r (DBId _id) = mkPath [rRoot r, showT _id, "edit"]
 
 
 ------------------------------------------------------------------------------
 showPath :: Resource b v a -> DBId -> Text
-showPath r (DBId _id) = T.intercalate "/" [rRoot r, showT _id]
+showPath r (DBId _id) = mkPath [rRoot r, showT _id]
 
 
 ------------------------------------------------------------------------------
 updatePath :: Resource b v a -> DBId -> Text
-updatePath r (DBId _id) = T.intercalate "/" [rRoot r, showT _id]
+updatePath r (DBId _id) = mkPath [rRoot r, showT _id]
 
 
 ------------------------------------------------------------------------------
 destroyPath :: Resource b v a -> DBId -> Text
-destroyPath r (DBId _id) = T.intercalate "/" [rRoot r, showT _id, "destroy"]
+destroyPath r (DBId _id) = mkPath [rRoot r, showT _id, "destroy"]
 
 
 setFormAction :: MonadSnap m => Text -> m a -> m a
