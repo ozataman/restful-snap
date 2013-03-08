@@ -58,29 +58,29 @@ import qualified Blaze.ByteString.Builder.Char8 as Build
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Trans
-import           Data.ByteString.Char8 (ByteString)
-import qualified Data.ByteString.Char8 as B
-import           Data.Char             (toUpper)
+import           Data.ByteString.Char8          (ByteString)
+import qualified Data.ByteString.Char8          as B
+import           Data.Char                      (toUpper)
 import           Data.Default
 import           Data.Int
-import qualified Data.Map              as M
+import qualified Data.Map                       as M
 import           Data.Monoid
 import           Data.Readable
-import           Data.Text             (Text)
-import qualified Data.Text             as T
-import qualified Data.Text.Encoding    as T
+import           Data.Text                      (Text)
+import qualified Data.Text                      as T
+import qualified Data.Text.Encoding             as T
 import           Data.Time
 import           Data.Typeable
 import           Data.Word
 import           Heist
-import qualified Heist.Compiled as C
-import qualified Heist.Interpreted as I
+import qualified Heist.Compiled                 as C
+import qualified Heist.Interpreted              as I
 import           Snap.Core
 import           Snap.Snaplet
 import           Snap.Snaplet.Heist
 import           System.Locale
-import qualified Text.XmlHtml as X
 import           Text.Digestive
+import qualified Text.XmlHtml                   as X
 ------------------------------------------------------------------------------
 
 
@@ -123,66 +123,80 @@ instance Default DBId where
 instance Readable DBId where fromText = return . DBId <=< fromText
 
 
-data Resource b v a = Resource {
-      rName :: Text
+data Resource = Resource {
+      rName              :: Text
     -- ^ A name for this resource
-    , rRoot :: Text
+    , rRoot              :: Text
     -- ^ URL root for this resource
-    , rHandlers :: [(CRUD, Handler b v a)]
-    -- ^ Standard CRUD handlers
-    , rResourceActions :: [(Text, Handler b v a)]
-    -- ^ Additional resource level handlers
-    , rItemActions :: [(Text, Handler b v a)]
-    -- ^ Additional resource instance/item level handlers
-    }
+    , rResourceEndpoints :: [Text]
+    -- ^ Resource level routing end points
+    , rItemEndpoints     :: [Text]
+    -- ^ Item/instance level routing end points
+}
 
-instance Default (Resource b v a) where
-    def = Resource "items" "/items" [] [] []
+instance Default Resource where
+    def = Resource "items" "/items" [] []
 
 
 ------------------------------------------------------------------------------
 -- | One-stop convenience function to enable RESTful resources in your
 -- application.  Call this function from your initializer passing it all of
 -- your resources and it will add the routes and splices for you.
-initRest :: HasHeist b => [Resource b v ()] -> Initializer b v ()
-initRest resources = do
-    let splices = concatMap resourceSplices resources
-        routes = concatMap resourceRoutes resources
+initRest :: HasHeist b
+         => Resource
+         -- ^ Resource definition
+         -> [(CRUD, Handler b v ())]
+         -- ^ Standard CRUD handlers
+         -> [(Text, Handler b v ())]
+         -- ^ Additional resource level handlers
+         -> [(Text, Handler b v ())]
+         -- ^ Additional instance/item level handlers
+         -> Initializer b v ()
+initRest res rHandlers rResourceActions rItemActions = do
+    let splices = resourceSplices res
+        routes = resourceRoutes res rHandlers rResourceActions rItemActions
     addSplices splices
     addRoutes routes
 
 
 ------------------------------------------------------------------------------
-resourceRoutes :: Resource b v a -> [(ByteString, Handler b v a)]
-resourceRoutes r@Resource{..} =
+-- | See 'initRest' for an explanation of the arguments to this function
+resourceRoutes
+    :: MonadSnap m
+    => Resource
+    -> [(CRUD, m a)]
+    -> [(Text, m a)]
+    -> [(Text, m a)]
+    -> [(ByteString, m a)]
+resourceRoutes r rHandlers rResourceActions rItemActions =
     map (mkCrudRoute r) rHandlers ++
     map (mkResourceRoute r) rResourceActions ++
     map (mkItemRoute r) rItemActions
 
 
 ------------------------------------------------------------------------------
-resourceRouter :: Resource b v a -> Handler b v a
-resourceRouter = route . resourceRoutes
+resourceRouter :: MonadSnap m => Resource -> [(CRUD, m a)] -> [(Text, m a)] -> [(Text, m a)] -> m a
+resourceRouter r as bs cs = route $ resourceRoutes r as bs cs
 
 
 mkPath = T.intercalate "/" . filter (not . T.null)
 mkPathB = B.intercalate "/" . filter (not . B.null)
 
 ------------------------------------------------------------------------------
-mkItemRoute :: Resource t t1 t2 -> (Text, t3) -> (ByteString, t3)
+mkItemRoute :: Resource -> (Text, t3) -> (ByteString, t3)
 mkItemRoute Resource{..} (act, h) =
   (T.encodeUtf8 $ mkPath [rRoot, ":id", act], h)
 
 
 ------------------------------------------------------------------------------
-mkResourceRoute :: Resource t t1 t2 -> (Text, t3) -> (ByteString, t3)
+mkResourceRoute :: Resource -> (Text, t3) -> (ByteString, t3)
 mkResourceRoute Resource{..} (act, h) =
   (T.encodeUtf8 $ mkPath [rRoot, act], h)
 
 
 ------------------------------------------------------------------------------
 mkCrudRoute :: MonadSnap m
-            => Resource b v a -> (CRUD, m a) -> (ByteString, m a)
+            => Resource -> (CRUD, m a) -> (ByteString, m a)
 mkCrudRoute r@Resource{..} (crud, h) =
     case crud of
       RIndex -> (T.encodeUtf8 rRoot, ifTop $ method GET h)
@@ -207,7 +221,7 @@ mkCrudRoute r@Resource{..} (crud, h) =
 
 ------------------------------------------------------------------------------
 -- | Return heist template location for given crud action
-templatePath :: Resource t t1 t2 -> CRUD -> ByteString
+templatePath :: Resource -> CRUD -> ByteString
 templatePath Resource{..} crud =
     case crud of
       RIndex -> mkPathB [r, "index"]
@@ -222,7 +236,7 @@ templatePath Resource{..} crud =
 
 
 ------------------------------------------------------------------------------
---crudPath :: Resource b v a -> CRUD -> DBId -> Text
+--crudPath :: Resource -> CRUD -> DBId -> Text
 --crudPath Resource{..} crud DBId{..} =
 --  case crud of
 --    RIndex -> rRoot
@@ -236,48 +250,48 @@ templatePath Resource{..} crud =
 
 
 ------------------------------------------------------------------------------
-itemActionPath :: Resource t t1 t2 -> Text -> DBId -> Text
+itemActionPath :: Resource -> Text -> DBId -> Text
 itemActionPath Resource{..} t DBId{..} =
     mkPath [rRoot, showT unDBId, t]
 
 
 ------------------------------------------------------------------------------
-indexPath :: Resource b v a -> Text
+indexPath :: Resource -> Text
 indexPath r = rRoot r
 
 
 ------------------------------------------------------------------------------
-createPath :: Resource b v a -> Text
+createPath :: Resource -> Text
 createPath r = rRoot r
 
 
 ------------------------------------------------------------------------------
-newPath :: Resource b v a -> Text
+newPath :: Resource -> Text
 newPath r = mkPath [rRoot r, "new"]
 
 
 ------------------------------------------------------------------------------
-rootPath :: Resource b v a -> Text
+rootPath :: Resource -> Text
 rootPath = indexPath
 
 
 ------------------------------------------------------------------------------
-editPath :: Resource b v a -> DBId -> Text
+editPath :: Resource -> DBId -> Text
 editPath r (DBId _id) = mkPath [rRoot r, showT _id, "edit"]
 
 
 ------------------------------------------------------------------------------
-showPath :: Resource b v a -> DBId -> Text
+showPath :: Resource -> DBId -> Text
 showPath r (DBId _id) = mkPath [rRoot r, showT _id]
 
 
 ------------------------------------------------------------------------------
-updatePath :: Resource b v a -> DBId -> Text
+updatePath :: Resource -> DBId -> Text
 updatePath r (DBId _id) = mkPath [rRoot r, showT _id]
 
 
 ------------------------------------------------------------------------------
-destroyPath :: Resource b v a -> DBId -> Text
+destroyPath :: Resource -> DBId -> Text
 destroyPath r (DBId _id) = mkPath [rRoot r, showT _id, "destroy"]
 
 
@@ -294,7 +308,7 @@ getFormAction = do
 
 
 -------------------------------------------------------------------------------
-resourceSplices :: Monad m => Resource b v a -> [(Text, HeistT n m Template)]
+resourceSplices :: Monad m => Resource -> [(Text, HeistT n m Template)]
 resourceSplices r@Resource{..} =
   [ (T.concat [rName, "NewPath"], I.textSplice $ newPath r)
   , (T.concat [rName, "IndexPath"], I.textSplice $ indexPath r)
@@ -307,9 +321,9 @@ resourceSplices r@Resource{..} =
   ]
 
 ------------------------------------------------------------------------------
-itemSplices :: Monad m => Resource b v a -> DBId -> [(Text, I.Splice m)]
+itemSplices :: Monad m => Resource -> DBId -> [(Text, I.Splice m)]
 itemSplices r@Resource{..} dbid =
-  map (mkItemActionSplice r dbid . fst) rItemActions ++
+  map (mkItemActionSplice r dbid) rItemEndpoints ++
   [ (T.concat [rName, "ItemEditPath"], I.textSplice $ editPath r dbid)
   , (T.concat [rName, "ItemShowPath"], I.textSplice $ showPath r dbid)
   , (T.concat [rName, "ItemUpdatePath"], I.textSplice $ updatePath r dbid)
@@ -321,14 +335,14 @@ itemSplices r@Resource{..} dbid =
 
 
 -------------------------------------------------------------------------------
-resourceCSplices :: MonadSnap m => Resource b v a -> [(Text, C.Splice m)]
+resourceCSplices :: MonadSnap m => Resource -> [(Text, C.Splice m)]
 resourceCSplices r = C.mapSnd (C.runNodeList =<<) (resourceSplices r)
 
 
 ------------------------------------------------------------------------------
-itemCSplices :: Resource b v a
+itemCSplices :: Resource
              -> [(Text, DBId -> Text)]
-itemCSplices r@Resource{..} = 
+itemCSplices r@Resource{..} =
     [ (T.concat [rName, "ItemEditPath"], editPath r)
     , (T.concat [rName, "ItemShowPath"], showPath r)
     , (T.concat [rName, "ItemUpdatePath"], updatePath r)
@@ -339,19 +353,19 @@ itemCSplices r@Resource{..} =
       , (T.concat [rName, "ItemIndexPath"], indexPath r)
       , (T.concat [rName, "ItemCreatePath"], createPath r)
       ] ++
-    map (mkItemActionCSplice r . fst) rItemActions
+    map (mkItemActionCSplice r) rItemEndpoints
 
 
 -------------------------------------------------------------------------------
 mkItemActionSplice :: Monad m
-                   => Resource b v a -> DBId -> Text -> (Text, I.Splice m)
+                   => Resource -> DBId -> Text -> (Text, I.Splice m)
 mkItemActionSplice r@Resource{..} dbid t =
   ( T.concat [rName, "Item", cap t, "Path"]
   , I.textSplice $ itemActionPath r t dbid)
 
 
 -------------------------------------------------------------------------------
-mkItemActionCSplice :: Resource b v a -> Text -> (Text, DBId -> Text)
+mkItemActionCSplice :: Resource -> Text -> (Text, DBId -> Text)
 mkItemActionCSplice r@Resource{..} t =
   ( T.concat [rName, "Item", cap t, "Path"]
   , itemActionPath r t)
@@ -359,7 +373,7 @@ mkItemActionCSplice r@Resource{..} t =
 
 ------------------------------------------------------------------------------
 -- | Redirect to given item's default show page
-redirToItem :: MonadSnap m => Resource b v a -> DBId -> m a
+redirToItem :: MonadSnap m => Resource -> DBId -> m a
 redirToItem r dbid = redirect . T.encodeUtf8 $ showPath r dbid
 
 
@@ -417,11 +431,11 @@ validDate = maybe (Error "invalid date") Success .
 
 
 dayText :: Day -> Text
-dayText = T.pack . formatTime defaultTimeLocale "%F" 
+dayText = T.pack . formatTime defaultTimeLocale "%F"
 
 
 ------------------------------------------------------------------------------
--- | A simple formlet for dates that 
+-- | A simple formlet for dates that
 simpleDateFormlet :: (Monad m)
                   => Maybe Day -> Form Text m Day
 simpleDateFormlet d = validate validDate $
@@ -429,7 +443,7 @@ simpleDateFormlet d = validate validDate $
 
 
 ------------------------------------------------------------------------------
--- | 
+-- |
 class PrimSplice a where
     iPrimSplice :: Monad m => a -> m [X.Node]
     cPrimSplice :: a -> Builder
@@ -511,7 +525,7 @@ instance PrimSplice a => PrimSplice (Maybe a) where
 -- class HasSplices a where
 --     iSplices :: (Monad m) => a -> [(Text, I.Splice m)]
 -- --    cSplices :: (Monad m) => [(Text, C.Promise a -> C.Splice m)]
--- 
+--
 -- instance HasSplices String where
 --     iSplices x = [("", I.textSplice $ T.pack x)]
 -- instance HasSplices Text where
@@ -524,7 +538,7 @@ instance PrimSplice a => PrimSplice (Maybe a) where
 --     iSplices x = [("", I.textSplice $ T.pack $ show x)]
 -- instance HasSplices Double where
 --     iSplices x = [("", I.textSplice $ T.pack $ show x)]
--- 
+--
 -- instance HasSplices Int8 where
 --     iSplices x = [("", I.textSplice $ T.pack $ show x)]
 -- instance HasSplices Int16 where
@@ -533,7 +547,7 @@ instance PrimSplice a => PrimSplice (Maybe a) where
 --     iSplices x = [("", I.textSplice $ T.pack $ show x)]
 -- instance HasSplices Int64 where
 --     iSplices x = [("", I.textSplice $ T.pack $ show x)]
--- 
+--
 -- instance HasSplices Word8 where
 --     iSplices x = [("", I.textSplice $ T.pack $ show x)]
 -- instance HasSplices Word16 where
@@ -542,10 +556,10 @@ instance PrimSplice a => PrimSplice (Maybe a) where
 --     iSplices x = [("", I.textSplice $ T.pack $ show x)]
 -- instance HasSplices Word64 where
 --     iSplices x = [("", I.textSplice $ T.pack $ show x)]
--- 
+--
 -- instance HasSplices Day where
 --     iSplices = iSplices . dayText
--- 
+--
 -- instance HasSplices a => HasSplices (Maybe a) where
 --     iSplices Nothing  = [("", I.textSplice "")]
 --     iSplices (Just x) = iSplices x
