@@ -151,12 +151,12 @@ initRest :: HasHeist b
          -- ^ Additional resource level handlers
          -> [(Text, Handler b v ())]
          -- ^ Additional instance/item level handlers
+         -> Snaplet (Heist b)
          -> Initializer b v ()
-initRest res rHandlers rResourceActions rItemActions = do
-    let splices = resourceSplices res
-        routes = resourceRoutes res rHandlers rResourceActions rItemActions
-    addSplices splices
-    addRoutes routes
+initRest res rHandlers rResourceActions rItemActions h = do
+    addRoutes $ resourceRoutes res rHandlers rResourceActions rItemActions
+    addConfig h mempty { hcInterpretedSplices = resourceSplices res
+                       , hcCompiledSplices = resourceCSplices res }
 
 
 ------------------------------------------------------------------------------
