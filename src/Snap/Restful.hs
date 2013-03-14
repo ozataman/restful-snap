@@ -249,6 +249,8 @@ templatePath Resource{..} crud =
 --    x -> error $ "Unimplemented crudpath " ++ show x
 
 
+resourceActionPath Resource{..} t = mkPath [rRoot, t]
+
 ------------------------------------------------------------------------------
 itemActionPath :: Resource -> Text -> DBId -> Text
 itemActionPath Resource{..} t DBId{..} =
@@ -308,19 +310,19 @@ getFormAction = do
 
 
 -------------------------------------------------------------------------------
+-- | Paths at the resource/collection level
 resourceSplices :: Monad m => Resource -> [(Text, HeistT n m Template)]
 resourceSplices r@Resource{..} =
+  map (mkResourceActionSplice r) rResourceEndpoints ++
   [ (T.concat [rName, "NewPath"], I.textSplice $ newPath r)
   , (T.concat [rName, "IndexPath"], I.textSplice $ indexPath r)
   , (T.concat [rName, "CreatePath"], I.textSplice $ createPath r)
   , (T.concat [rName, "Path"], I.textSplice $ rootPath r)
-
-  -- This splice is designed to be used in create and update forms to specify
-  -- the correct action URL.
-  --, ("RESTFormAction", undefined)
   ]
 
+
 ------------------------------------------------------------------------------
+-- | Paths at the resource-item level
 itemSplices :: Monad m => Resource -> DBId -> [(Text, I.Splice m)]
 itemSplices r@Resource{..} dbid =
   map (mkItemActionSplice r dbid) rItemEndpoints ++
@@ -336,7 +338,7 @@ itemSplices r@Resource{..} dbid =
 
 -------------------------------------------------------------------------------
 resourceCSplices :: MonadSnap m => Resource -> [(Text, C.Splice m)]
-resourceCSplices r = C.mapSnd (C.runNodeList =<<) (resourceSplices r)
+resourceCSplices r = C.mapSnd (C.runNodeList =<<) $ resourceSplices r
 
 
 ------------------------------------------------------------------------------
@@ -362,6 +364,13 @@ mkItemActionSplice :: Monad m
 mkItemActionSplice r@Resource{..} dbid t =
   ( T.concat [rName, "Item", cap t, "Path"]
   , I.textSplice $ itemActionPath r t dbid)
+
+
+-------------------------------------------------------------------------------
+mkResourceActionSplice :: Monad m => Resource -> Text -> (Text, HeistT n m Template)
+mkResourceActionSplice r@Resource{..} t =
+  ( T.concat [rName, cap t, "Path"]
+  , I.textSplice $ resourceActionPath r t)
 
 
 -------------------------------------------------------------------------------
