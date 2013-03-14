@@ -152,6 +152,7 @@ initRest :: HasHeist b
          -> [(Text, Handler b v ())]
          -- ^ Additional instance/item level handlers
          -> Snaplet (Heist b)
+         -- ^ The Heist snaplet initialized in your app's 'Initializer'
          -> Initializer b v ()
 initRest res rHandlers rResourceActions rItemActions h = do
     addRoutes $ resourceRoutes res rHandlers rResourceActions rItemActions
