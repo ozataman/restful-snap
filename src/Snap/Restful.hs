@@ -17,8 +17,8 @@ module Snap.Restful
     , iPrimShow
     , cPrimShow
 
-
     , initRest
+    , mkRest
     , resourceRouter
     , resourceRoutes
 
@@ -56,6 +56,7 @@ module Snap.Restful
 import           Blaze.ByteString.Builder
 import qualified Blaze.ByteString.Builder.Char8 as Build
 import           Control.Applicative
+import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Trans
 import           Data.ByteString.Char8          (ByteString)
@@ -82,6 +83,11 @@ import           System.Locale
 import           Text.Digestive
 import qualified Text.XmlHtml                   as X
 ------------------------------------------------------------------------------
+
+
+
+unitLens :: Lens' b ()
+unitLens = lens (const ()) (\a () -> a)
 
 
 ------------------------------------------------------------------------------
@@ -134,8 +140,24 @@ data Resource = Resource {
     -- ^ Item/instance level routing end points
 }
 
+
 instance Default Resource where
     def = Resource "items" "/items" [] []
+
+
+
+mkRest :: HasHeist b
+       => Resource
+       -> [(CRUD, Handler b () ())]
+       -> [(Text, Handler b () ())]
+       -> [(Text, Handler b () ())]
+       -> Snaplet (Heist b)
+       -> SnapletInit b ()
+mkRest res rHandlers rResourceActions rItemActions h =
+    makeSnaplet (T.concat [rName res, "-resource"])
+                (T.concat ["RESTful resource for ", rName res])
+                Nothing $
+                initRest res rHandlers rResourceActions rItemActions h
 
 
 ------------------------------------------------------------------------------
