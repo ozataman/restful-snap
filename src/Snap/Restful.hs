@@ -17,8 +17,9 @@ module Snap.Restful
     , iPrimShow
     , cPrimShow
 
+    , addResource
     , initRest
-    , mkRest
+    , unitLens
     , resourceRouter
     , resourceRoutes
 
@@ -86,19 +87,15 @@ import qualified Text.XmlHtml                   as X
 
 
 
-unitLens :: Lens' b ()
-unitLens = lens (const ()) (\a () -> a)
-
-
 ------------------------------------------------------------------------------
 -- | Adds a prefix to the tag names for a list of splices.  If the existing
 -- tag name is empty, then the new tag name is just the prefix.  Otherwise the
 -- new tag name is the prefix followed by an underscore followed by the
 -- existing name.
 prefixSplices :: Text -> [(Text, a)] -> [(Text, a)]
-prefixSplices pre = map f
+prefixSplices prefix = map f
   where
-    f (t,v) = if T.null t then (pre,v) else (T.concat [pre,"_",t], v)
+    f (t,v) = if T.null t then (prefix,v) else (T.concat [prefix,"_",t], v)
 
 
 
@@ -145,45 +142,55 @@ instance Default Resource where
     def = Resource "items" "/items" [] []
 
 
-
-mkRest :: HasHeist b
-       => Resource
-       -> [(CRUD, Handler b () ())]
-       -> [(Text, Handler b () ())]
-       -> [(Text, Handler b () ())]
-       -> Snaplet (Heist b)
-       -> SnapletInit b ()
-mkRest res rHandlers rResourceActions rItemActions h =
+------------------------------------------------------------------------------
+-- | An initializer for encapsulating RESTful resources as a standalone
+-- snaplet.
+initRest :: HasHeist b
+         => Resource
+         -> [(CRUD, Handler b () ())]
+         -> [(Text, Handler b () ())]
+         -> [(Text, Handler b () ())]
+         -> Snaplet (Heist b)
+         -> SnapletInit b ()
+initRest res rHandlers rResourceActions rItemActions h =
     makeSnaplet (T.concat [rName res, "-resource"])
                 (T.concat ["RESTful resource for ", rName res])
                 Nothing $
-                initRest res rHandlers rResourceActions rItemActions h
+                addResource res rHandlers rResourceActions rItemActions h
+
+
+------------------------------------------------------------------------------
+-- | Since 'initRest' returns unit, we provide a generic unit lens here for
+-- use with nestSnaplet in case you don't want to add a unit field to your
+-- application state type.
+unitLens :: Lens' b ()
+unitLens = lens (const ()) (\a () -> a)
 
 
 ------------------------------------------------------------------------------
 -- | One-stop convenience function to enable RESTful resources in your
 -- application.  Call this function from your initializer passing it all of
 -- your resources and it will add the routes and splices for you.
-initRest :: HasHeist b
-         => Resource
-         -- ^ Resource definition
-         -> [(CRUD, Handler b v ())]
-         -- ^ Standard CRUD handlers
-         -> [(Text, Handler b v ())]
-         -- ^ Additional resource level handlers
-         -> [(Text, Handler b v ())]
-         -- ^ Additional instance/item level handlers
-         -> Snaplet (Heist b)
-         -- ^ The Heist snaplet initialized in your app's 'Initializer'
-         -> Initializer b v ()
-initRest res rHandlers rResourceActions rItemActions h = do
+addResource :: HasHeist b
+            => Resource
+            -- ^ Resource definition
+            -> [(CRUD, Handler b v ())]
+            -- ^ Standard CRUD handlers
+            -> [(Text, Handler b v ())]
+            -- ^ Additional resource level handlers
+            -> [(Text, Handler b v ())]
+            -- ^ Additional instance/item level handlers
+            -> Snaplet (Heist b)
+            -- ^ The Heist snaplet initialized in your app's 'Initializer'
+            -> Initializer b v ()
+addResource res rHandlers rResourceActions rItemActions h = do
     addRoutes $ resourceRoutes res rHandlers rResourceActions rItemActions
     addConfig h mempty { hcInterpretedSplices = resourceSplices res
                        , hcCompiledSplices = resourceCSplices res }
 
 
 ------------------------------------------------------------------------------
--- | See 'initRest' for an explanation of the arguments to this function
+-- | See 'addResource' for an explanation of the arguments to this function
 resourceRoutes
     :: MonadSnap m
     => Resource
@@ -202,19 +209,21 @@ resourceRouter :: MonadSnap m => Resource -> [(CRUD, m a)] -> [(Text, m a)] -> [
 resourceRouter r as bs cs = route $ resourceRoutes r as bs cs
 
 
+mkPath :: [Text] -> Text
 mkPath = T.intercalate "/" . filter (not . T.null)
+mkPathB :: [ByteString] -> ByteString
 mkPathB = B.intercalate "/" . filter (not . B.null)
 
 ------------------------------------------------------------------------------
 mkItemRoute :: Resource -> (Text, t3) -> (ByteString, t3)
-mkItemRoute Resource{..} (act, h) =
-  (T.encodeUtf8 $ mkPath [rRoot, ":id", act], h)
+mkItemRoute Resource{..} (actionName, h) =
+  (T.encodeUtf8 $ mkPath [rRoot, ":id", actionName], h)
 
 
 ------------------------------------------------------------------------------
 mkResourceRoute :: Resource -> (Text, t3) -> (ByteString, t3)
-mkResourceRoute Resource{..} (act, h) =
-  (T.encodeUtf8 $ mkPath [rRoot, act], h)
+mkResourceRoute Resource{..} (actionName, h) =
+  (T.encodeUtf8 $ mkPath [rRoot, actionName], h)
 
 
 ------------------------------------------------------------------------------
@@ -272,7 +281,9 @@ templatePath Resource{..} crud =
 --    x -> error $ "Unimplemented crudpath " ++ show x
 
 
+resourceActionPath :: Resource -> Text -> Text
 resourceActionPath Resource{..} t = mkPath [rRoot, t]
+
 
 ------------------------------------------------------------------------------
 itemActionPath :: Resource -> Text -> DBId -> Text
