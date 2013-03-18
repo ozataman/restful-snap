@@ -24,7 +24,6 @@ module Snap.Restful
     , resourceRoutes
 
     , rootPath
---    , crudPath
     , indexPath
     , createPath
     , showPath
@@ -57,6 +56,7 @@ module Snap.Restful
 import           Blaze.ByteString.Builder
 import qualified Blaze.ByteString.Builder.Char8 as Build
 import           Control.Applicative
+import           Control.Arrow
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Trans
@@ -190,7 +190,10 @@ addResource res rHandlers rResourceActions rItemActions h = do
 
 
 ------------------------------------------------------------------------------
--- | See 'addResource' for an explanation of the arguments to this function
+-- | See 'addResource' for an explanation of the arguments to this function.
+-- The routes returned are not prefixed with rRoot from Resource.  This is
+-- because addResource uses this function and automatically adds the correct
+-- prefix by virtue of the fact that it uses the snaplet 'addRoutes' function.
 resourceRoutes
     :: MonadSnap m
     => Resource
@@ -205,8 +208,17 @@ resourceRoutes r rHandlers rResourceActions rItemActions =
 
 
 ------------------------------------------------------------------------------
-resourceRouter :: MonadSnap m => Resource -> [(CRUD, m a)] -> [(Text, m a)] -> [(Text, m a)] -> m a
-resourceRouter r as bs cs = route $ resourceRoutes r as bs cs
+-- | Generate a route handler for the routes returned by resourceRoutes.  This
+-- function does add the rRoot prefix.
+resourceRouter :: MonadSnap m
+               => Resource
+               -> [(CRUD, m a)]
+               -> [(Text, m a)]
+               -> [(Text, m a)]
+               -> m a
+resourceRouter r as bs cs =
+    route $ map (first $ B.append $ T.encodeUtf8 $ rRoot r)
+          $ resourceRoutes r as bs cs
 
 
 mkPath :: [Text] -> Text
@@ -217,13 +229,13 @@ mkPathB = B.intercalate "/" . filter (not . B.null)
 ------------------------------------------------------------------------------
 mkItemRoute :: Resource -> (Text, t3) -> (ByteString, t3)
 mkItemRoute Resource{..} (actionName, h) =
-  (T.encodeUtf8 $ mkPath [rRoot, ":id", actionName], h)
+  (T.encodeUtf8 $ mkPath [":id", actionName], h)
 
 
 ------------------------------------------------------------------------------
 mkResourceRoute :: Resource -> (Text, t3) -> (ByteString, t3)
 mkResourceRoute Resource{..} (actionName, h) =
-  (T.encodeUtf8 $ mkPath [rRoot, actionName], h)
+  (T.encodeUtf8 $ mkPath [actionName], h)
 
 
 ------------------------------------------------------------------------------
@@ -231,18 +243,18 @@ mkCrudRoute :: MonadSnap m
             => Resource -> (CRUD, m a) -> (ByteString, m a)
 mkCrudRoute r@Resource{..} (crud, h) =
     case crud of
-      RIndex -> (T.encodeUtf8 rRoot, ifTop $ method GET h)
-      RCreate -> ( T.encodeUtf8 rRoot
+      RIndex -> ("", ifTop $ method GET h)
+      RCreate -> ( ""
                  , ifTop $ method POST (setCreateAction h))
-      RShow -> ( T.encodeUtf8 $ mkPath [rRoot, ":id"]
+      RShow -> ( T.encodeUtf8 $ mkPath [":id"]
                , ifTop $ method GET h)
-      RNew -> ( T.encodeUtf8 $ mkPath [rRoot, "new"]
+      RNew -> ( T.encodeUtf8 $ mkPath ["new"]
               , ifTop $ method GET (setCreateAction h))
-      REdit -> ( T.encodeUtf8 $ mkPath [rRoot, ":id", "edit"]
+      REdit -> ( T.encodeUtf8 $ mkPath [":id", "edit"]
                , ifTop $ method GET (setEditAction h))
-      RUpdate -> ( T.encodeUtf8 $ mkPath [rRoot, ":id"]
+      RUpdate -> ( T.encodeUtf8 $ mkPath [":id"]
                  , ifTop $ method POST (setEditAction h))
-      RDestroy -> ( T.encodeUtf8 $ mkPath [rRoot, ":id", "destroy"]
+      RDestroy -> ( T.encodeUtf8 $ mkPath [":id", "destroy"]
                   , ifTop $ method POST h)
   where
     setCreateAction h2 = setFormAction (createPath r) h2
@@ -265,20 +277,6 @@ templatePath Resource{..} crud =
       RDestroy -> error "Destroy action does not get a template."
   where
     r = T.encodeUtf8 rRoot
-
-
-------------------------------------------------------------------------------
---crudPath :: Resource -> CRUD -> DBId -> Text
---crudPath Resource{..} crud DBId{..} =
---  case crud of
---    RIndex -> rRoot
---    RCreate -> rRoot
---    RShow -> mkPath [rRoot, showT unDBId]
---    RNew -> mkPath [rRoot, "new"]
---    REdit -> mkPath [rRoot, showT unDBId, "edit"]
---    RUpdate -> mkPath [rRoot, showT unDBId]
---    RDestroy -> mkPath [rRoot, showT unDBId, "destroy"]
---    x -> error $ "Unimplemented crudpath " ++ show x
 
 
 resourceActionPath :: Resource -> Text -> Text
