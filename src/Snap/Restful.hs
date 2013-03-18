@@ -18,6 +18,7 @@ module Snap.Restful
     , cPrimShow
 
     , addResource
+    , addResourceRelative
     , initRest
     , unitLens
     , resourceRouter
@@ -78,6 +79,7 @@ import           Heist
 import qualified Heist.Compiled                 as C
 import qualified Heist.Interpreted              as I
 import           Snap.Core
+import           Snap.Extras.CoreUtils
 import           Snap.Snaplet
 import           Snap.Snaplet.Heist
 import           System.Locale
@@ -155,8 +157,8 @@ initRest :: HasHeist b
 initRest res rHandlers rResourceActions rItemActions h =
     makeSnaplet (T.concat [rName res, "-resource"])
                 (T.concat ["RESTful resource for ", rName res])
-                Nothing $
-                addResource res rHandlers rResourceActions rItemActions h
+                Nothing $ addResource' resourceRoutesRelative res
+                            rHandlers rResourceActions rItemActions h
 
 
 ------------------------------------------------------------------------------
@@ -165,6 +167,19 @@ initRest res rHandlers rResourceActions rItemActions h =
 -- application state type.
 unitLens :: Lens' b ()
 unitLens = lens (const ()) (\a () -> a)
+
+
+------------------------------------------------------------------------------
+-- We need two addResource functions because we are dealing with paths in two
+-- different contexts: routes and splices.  With routes, the addRoutes
+-- function automatically makes things relative to the current snaplet root.
+-- But that will only take effect when initRest is used, and is therefore
+-- inside a nestSnaplet call.
+--
+-- For paths inside splices, the snaplet addRoute infrastructure is not
+-- available because these splices always run in the Handler App App monad and
+-- therefore can't have access to the current snaplet root.
+------------------------------------------------------------------------------
 
 
 ------------------------------------------------------------------------------
@@ -183,8 +198,40 @@ addResource :: HasHeist b
             -> Snaplet (Heist b)
             -- ^ The Heist snaplet initialized in your app's 'Initializer'
             -> Initializer b v ()
-addResource res rHandlers rResourceActions rItemActions h = do
-    addRoutes $ resourceRoutes res rHandlers rResourceActions rItemActions
+addResource = addResource' resourceRoutes
+
+
+------------------------------------------------------------------------------
+-- | Just like 'addResource', but makes the handlers relative to the current
+-- snaplet's root.  Use this function if you're writing a snaplet.
+addResourceRelative :: HasHeist b
+                    => Resource
+                    -- ^ Resource definition
+                    -> [(CRUD, Handler b v ())]
+                    -- ^ Standard CRUD handlers
+                    -> [(Text, Handler b v ())]
+                    -- ^ Additional resource level handlers
+                    -> [(Text, Handler b v ())]
+                    -- ^ Additional instance/item level handlers
+                    -> Snaplet (Heist b)
+                    -- ^ The Heist snaplet initialized in your app's
+                    -- 'Initializer'
+                    -> Initializer b v ()
+addResourceRelative = addResource' resourceRoutesRelative
+
+
+------------------------------------------------------------------------------
+-- | Helper function that can be used with resourceRoutes or
+-- resourceRoutesRelative.
+addResource' :: (Resource -> r -> s -> t -> [(ByteString, Handler b v ())])
+             -> Resource
+             -> r
+             -> s
+             -> t
+             -> Snaplet (Heist b)
+             -> Initializer b v ()
+addResource' f res rHandlers rResourceActions rItemActions h = do
+    addRoutes $ f res rHandlers rResourceActions rItemActions
     addConfig h mempty { hcInterpretedSplices = resourceSplices res
                        , hcCompiledSplices = resourceCSplices res }
 
@@ -202,6 +249,21 @@ resourceRoutes
     -> [(Text, m a)]
     -> [(ByteString, m a)]
 resourceRoutes r rHandlers rResourceActions rItemActions =
+    map (first $ (T.encodeUtf8 (rRoot r) -/-))
+        (resourceRoutesRelative r rHandlers rResourceActions rItemActions)
+
+
+------------------------------------------------------------------------------
+-- | See 'addResource' for an explanation of the arguments to this function.
+-- The routes returned are not prefixed with rRoot from Resource.
+resourceRoutesRelative
+    :: MonadSnap m
+    => Resource
+    -> [(CRUD, m a)]
+    -> [(Text, m a)]
+    -> [(Text, m a)]
+    -> [(ByteString, m a)]
+resourceRoutesRelative r rHandlers rResourceActions rItemActions =
     map (mkCrudRoute r) rHandlers ++
     map (mkResourceRoute r) rResourceActions ++
     map (mkItemRoute r) rItemActions
@@ -216,13 +278,12 @@ resourceRouter :: MonadSnap m
                -> [(Text, m a)]
                -> [(Text, m a)]
                -> m a
-resourceRouter r as bs cs =
-    route $ map (first $ B.append $ T.encodeUtf8 $ rRoot r)
-          $ resourceRoutes r as bs cs
+resourceRouter r as bs cs = route $ resourceRoutes r as bs cs
 
 
 mkPath :: [Text] -> Text
 mkPath = T.intercalate "/" . filter (not . T.null)
+
 mkPathB :: [ByteString] -> ByteString
 mkPathB = B.intercalate "/" . filter (not . B.null)
 
@@ -244,12 +305,9 @@ mkCrudRoute :: MonadSnap m
 mkCrudRoute r@Resource{..} (crud, h) =
     case crud of
       RIndex -> ("", ifTop $ method GET h)
-      RCreate -> ( ""
-                 , ifTop $ method POST (setCreateAction h))
-      RShow -> ( T.encodeUtf8 $ mkPath [":id"]
-               , ifTop $ method GET h)
-      RNew -> ( T.encodeUtf8 $ mkPath ["new"]
-              , ifTop $ method GET (setCreateAction h))
+      RCreate -> ( "", ifTop $ method POST (setCreateAction h))
+      RShow -> ( ":id", ifTop $ method GET h)
+      RNew -> ( "new", ifTop $ method GET (setCreateAction h))
       REdit -> ( T.encodeUtf8 $ mkPath [":id", "edit"]
                , ifTop $ method GET (setEditAction h))
       RUpdate -> ( T.encodeUtf8 $ mkPath [":id"]
