@@ -58,6 +58,7 @@ import           Blaze.ByteString.Builder
 import qualified Blaze.ByteString.Builder.Char8 as Build
 import           Control.Applicative
 import           Control.Arrow
+import           Control.Error
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Trans
@@ -198,7 +199,9 @@ addResource :: HasHeist b
             -> Snaplet (Heist b)
             -- ^ The Heist snaplet initialized in your app's 'Initializer'
             -> Initializer b v ()
-addResource = addResource' resourceRoutes
+addResource res rHandlers rResourceActions rItemActions h = do
+    addRoutes $ [((T.encodeUtf8 $ rRoot res) -/- ":id/:action", restfulHeistServe res)]
+    addResource' resourceRoutes res rHandlers rResourceActions rItemActions h
 
 
 ------------------------------------------------------------------------------
@@ -217,7 +220,18 @@ addResourceRelative :: HasHeist b
                     -- ^ The Heist snaplet initialized in your app's
                     -- 'Initializer'
                     -> Initializer b v ()
-addResourceRelative = addResource' resourceRoutesRelative
+addResourceRelative res rHandlers rResourceActions rItemActions h = do
+    addRoutes $ [(":id/:action", restfulHeistServe res)]
+    addResource' resourceRoutesRelative res rHandlers rResourceActions rItemActions h
+
+
+-------------------------------------------------------------------------------
+restfulHeistServe :: HasHeist b => Resource -> Handler b v ()
+restfulHeistServe res = do
+    x <- runMaybeT $ do
+      action <- MaybeT $ getParam "action"
+      lift $ render $ mkPathB [T.encodeUtf8 (rRoot res), action]
+    maybe mzero return x
 
 
 ------------------------------------------------------------------------------
@@ -237,10 +251,9 @@ addResource' f res rHandlers rResourceActions rItemActions h = do
 
 
 ------------------------------------------------------------------------------
--- | See 'addResource' for an explanation of the arguments to this function.
--- The routes returned are not prefixed with rRoot from Resource.  This is
--- because addResource uses this function and automatically adds the correct
--- prefix by virtue of the fact that it uses the snaplet 'addRoutes' function.
+-- | See 'addResource' for an explanation of the arguments to this
+-- function. The routes returned ARE prefixed with rRoot from
+-- Resource.
 resourceRoutes
     :: MonadSnap m
     => Resource
