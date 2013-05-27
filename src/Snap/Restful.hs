@@ -101,15 +101,16 @@ prefixSplices prefix = map f
     f (t,v) = if T.null t then (prefix,v) else (T.concat [prefix,"_",t], v)
 
 
-
+------------------------------------------------------------------------------
+-- | Enumeration of all the different types of CRUD routes.
 data CRUD = RIndex
-          -- ^ Gets an item index
+          -- ^ An item index
           | RShow
-          -- ^ Gets a single item
+          -- ^ A single item
           | RNew
-          -- ^ Get the form for creating a new item
+          -- ^ The form for creating a new item
           | REdit
-          -- ^ Get the form for editing an item
+          -- ^ The form for editing an item
           | RCreate
           -- ^ Create a new item
           | RUpdate
@@ -129,6 +130,8 @@ instance Default DBId where
 instance Readable DBId where fromText = return . DBId <=< fromText
 
 
+------------------------------------------------------------------------------
+-- | Encapsulates the data necessary to define a resource.
 data Resource = Resource {
       rName              :: Text
     -- ^ A name for this resource
@@ -226,6 +229,7 @@ addResourceRelative res rHandlers rResourceActions rItemActions h = do
 
 
 -------------------------------------------------------------------------------
+-- | Serves the routes for a resource with heist templates.
 restfulHeistServe :: HasHeist b => Resource -> Handler b v ()
 restfulHeistServe res = do
     x <- runMaybeT $ do
@@ -355,57 +359,70 @@ resourceActionPath Resource{..} t = mkPath [rRoot, t]
 
 
 ------------------------------------------------------------------------------
+-- | Generates a path for an item action.
 itemActionPath :: Resource -> Text -> DBId -> Text
 itemActionPath Resource{..} t DBId{..} =
     mkPath [rRoot, showT unDBId, t]
 
 
 ------------------------------------------------------------------------------
+-- | Generates the path for the resource index.
 indexPath :: Resource -> Text
 indexPath r = rRoot r
 
 
 ------------------------------------------------------------------------------
+-- | Generates the path for creating a resource.
 createPath :: Resource -> Text
 createPath r = rRoot r
 
 
 ------------------------------------------------------------------------------
+-- | Generates the path for a form to a new resource.
 newPath :: Resource -> Text
 newPath r = mkPath [rRoot r, "new"]
 
 
 ------------------------------------------------------------------------------
+-- | Same as 'indexPath'.
 rootPath :: Resource -> Text
 rootPath = indexPath
 
 
 ------------------------------------------------------------------------------
+-- | Generates the path for a form to a new resource.
 editPath :: Resource -> DBId -> Text
 editPath r (DBId _id) = mkPath [rRoot r, showT _id, "edit"]
 
 
 ------------------------------------------------------------------------------
+-- | Generates the path for showing a single resource item.
 showPath :: Resource -> DBId -> Text
 showPath r (DBId _id) = mkPath [rRoot r, showT _id]
 
 
 ------------------------------------------------------------------------------
+-- | Generates the path for updating a single resource item.
 updatePath :: Resource -> DBId -> Text
 updatePath r (DBId _id) = mkPath [rRoot r, showT _id]
 
 
 ------------------------------------------------------------------------------
+-- | Generates the path for deleting a resource item.
 destroyPath :: Resource -> DBId -> Text
 destroyPath r (DBId _id) = mkPath [rRoot r, showT _id, "destroy"]
 
 
+------------------------------------------------------------------------------
+-- | Sets the @RESTFormAction@ param. 
 setFormAction :: MonadSnap m => Text -> m a -> m a
 setFormAction a = localRequest f
   where
     f req = req { rqParams = M.insert "RESTFormAction" [T.encodeUtf8 a]
                                       (rqParams req) }
 
+------------------------------------------------------------------------------
+-- | Gets the @RESTFormAction@ param. 
 getFormAction :: MonadSnap m => HeistT n m [X.Node]
 getFormAction = do
     p <- lift $ getParam "RESTFormAction"
@@ -425,7 +442,8 @@ resourceSplices r@Resource{..} =
 
 
 ------------------------------------------------------------------------------
--- | Paths at the resource-item level
+-- | Generates path splices for a resource item.  These splices let you put
+-- resource links in your templates in DRY manner.
 itemSplices :: Monad m => Resource -> DBId -> [(Text, I.Splice m)]
 itemSplices r@Resource{..} dbid =
   map (mkItemActionSplice r dbid) rItemEndpoints ++
@@ -440,11 +458,14 @@ itemSplices r@Resource{..} dbid =
 
 
 -------------------------------------------------------------------------------
+-- | Returns compiled splices for a resource.
 resourceCSplices :: MonadSnap m => Resource -> [(Text, C.Splice m)]
 resourceCSplices r = C.mapSnd (C.runNodeList =<<) $ resourceSplices r
 
 
 ------------------------------------------------------------------------------
+-- | Generates compiled path splices for a resource item.  These splices let
+-- you put resource links in your templates in DRY manner.
 itemCSplices :: Resource
              -> [(Text, DBId -> Text)]
 itemCSplices r@Resource{..} =
@@ -462,6 +483,7 @@ itemCSplices r@Resource{..} =
 
 
 -------------------------------------------------------------------------------
+-- | Splices to generate links for resource item actions.
 mkItemActionSplice :: Monad m
                    => Resource -> DBId -> Text -> (Text, I.Splice m)
 mkItemActionSplice r@Resource{..} dbid t =
@@ -470,6 +492,7 @@ mkItemActionSplice r@Resource{..} dbid t =
 
 
 -------------------------------------------------------------------------------
+-- | Compiled splices to generate links for resource actions.
 mkResourceActionSplice :: Monad m => Resource -> Text -> (Text, HeistT n m Template)
 mkResourceActionSplice r@Resource{..} t =
   ( T.concat [rName, cap t, "Path"]
@@ -477,6 +500,7 @@ mkResourceActionSplice r@Resource{..} t =
 
 
 -------------------------------------------------------------------------------
+-- | Compiled splices to generate links for resource item actions.
 mkItemActionCSplice :: Resource -> Text -> (Text, DBId -> Text)
 mkItemActionCSplice r@Resource{..} t =
   ( T.concat [rName, "Item", cap t, "Path"]
@@ -509,6 +533,7 @@ relativeRedirect _path = do
 
 
 ------------------------------------------------------------------------------
+-- | Type class for automatic formlet generation.
 class HasFormlet a where
     formlet :: Monad m => Formlet Text m a
 
@@ -555,7 +580,7 @@ simpleDateFormlet d = validate validDate $
 
 
 ------------------------------------------------------------------------------
--- |
+-- | Type class for automatic splice generation.
 class PrimSplice a where
     iPrimSplice :: Monad m => a -> m [X.Node]
     cPrimSplice :: a -> Builder
@@ -628,52 +653,5 @@ instance PrimSplice a => PrimSplice (Maybe a) where
     iPrimSplice (Just x) = iPrimSplice x
     cPrimSplice Nothing  = mempty
     cPrimSplice (Just x) = cPrimSplice x
-
-
-------------------------------------------------------------------------------
--- | Type class for uniform creation of splices.  For primitives that don't
--- have field names the splices should be a list with one element and an empty
--- string for the tag name.
--- class HasSplices a where
---     iSplices :: (Monad m) => a -> [(Text, I.Splice m)]
--- --    cSplices :: (Monad m) => [(Text, C.Promise a -> C.Splice m)]
---
--- instance HasSplices String where
---     iSplices x = [("", I.textSplice $ T.pack x)]
--- instance HasSplices Text where
---     iSplices x = [("", I.textSplice x)]
--- instance HasSplices Int where
---     iSplices x = [("", I.textSplice $ T.pack $ show x)]
--- instance HasSplices Integer where
---     iSplices x = [("", I.textSplice $ T.pack $ show x)]
--- instance HasSplices Float where
---     iSplices x = [("", I.textSplice $ T.pack $ show x)]
--- instance HasSplices Double where
---     iSplices x = [("", I.textSplice $ T.pack $ show x)]
---
--- instance HasSplices Int8 where
---     iSplices x = [("", I.textSplice $ T.pack $ show x)]
--- instance HasSplices Int16 where
---     iSplices x = [("", I.textSplice $ T.pack $ show x)]
--- instance HasSplices Int32 where
---     iSplices x = [("", I.textSplice $ T.pack $ show x)]
--- instance HasSplices Int64 where
---     iSplices x = [("", I.textSplice $ T.pack $ show x)]
---
--- instance HasSplices Word8 where
---     iSplices x = [("", I.textSplice $ T.pack $ show x)]
--- instance HasSplices Word16 where
---     iSplices x = [("", I.textSplice $ T.pack $ show x)]
--- instance HasSplices Word32 where
---     iSplices x = [("", I.textSplice $ T.pack $ show x)]
--- instance HasSplices Word64 where
---     iSplices x = [("", I.textSplice $ T.pack $ show x)]
---
--- instance HasSplices Day where
---     iSplices = iSplices . dayText
---
--- instance HasSplices a => HasSplices (Maybe a) where
---     iSplices Nothing  = [("", I.textSplice "")]
---     iSplices (Just x) = iSplices x
 
 
