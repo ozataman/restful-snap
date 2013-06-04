@@ -9,7 +9,11 @@
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE TypeSynonymInstances       #-}
 
-module Snap.Restful.TH where
+module Snap.Restful.TH
+  ( deriveHasFormlet
+  , iSplices
+  , cSplices
+  ) where
 
 ------------------------------------------------------------------------------
 import           Control.Applicative

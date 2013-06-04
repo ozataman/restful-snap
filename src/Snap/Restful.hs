@@ -8,22 +8,35 @@
 {-# LANGUAGE TypeSynonymInstances       #-}
 
 module Snap.Restful
-    ( CRUD (..)
+    (
+
+    -- * Core API
+      addResource
+    , addResourceRelative
+    , initRest
+
+    -- * Splice functions
+    , resourceSplices
+    , itemSplices
+    , resourceCSplices
+    , itemCSplices
+    , unitLens
+    , resourceRouter
+    , resourceRoutes
+
+    -- * Types
+    , CRUD (..)
     , Resource (..)
     , DBId (..)
+
+    -- * Generating forms and splices
     , HasFormlet (..)
     , PrimSplice (..)
     , iPrimText
     , iPrimShow
     , cPrimShow
 
-    , addResource
-    , addResourceRelative
-    , initRest
-    , unitLens
-    , resourceRouter
-    , resourceRoutes
-
+    -- * Functions for generating paths
     , rootPath
     , indexPath
     , createPath
@@ -33,23 +46,14 @@ module Snap.Restful
     , updatePath
     , destroyPath
     , itemActionPath
-
     , templatePath
 
-    , resourceSplices
-    , itemSplices
-    , resourceCSplices
-    , itemCSplices
-
+    -- * Misc helpers
     , redirToItem
-
     , prefixSplices
-
     , relativeRedirect
-
     , setFormAction
     , getFormAction
-
     , simpleDateFormlet
     ) where
 
