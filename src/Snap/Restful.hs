@@ -50,7 +50,6 @@ module Snap.Restful
 
     -- * Misc helpers
     , redirToItem
-    , prefixSplices
     , relativeRedirect
     , setFormAction
     , getFormAction
@@ -92,17 +91,6 @@ import           Text.Digestive
 import qualified Text.XmlHtml                   as X
 ------------------------------------------------------------------------------
 
-
-
-------------------------------------------------------------------------------
--- | Adds a prefix to the tag names for a list of splices.  If the existing
--- tag name is empty, then the new tag name is just the prefix.  Otherwise the
--- new tag name is the prefix followed by an underscore followed by the
--- existing name.
-prefixSplices :: Text -> [(Text, a)] -> [(Text, a)]
-prefixSplices prefix = map f
-  where
-    f (t,v) = if T.null t then (prefix,v) else (T.concat [prefix,"_",t], v)
 
 
 ------------------------------------------------------------------------------
@@ -435,80 +423,79 @@ getFormAction = do
 
 -------------------------------------------------------------------------------
 -- | Paths at the resource/collection level
-resourceSplices :: Monad m => Resource -> [(Text, HeistT n m Template)]
+resourceSplices :: Monad m => Resource -> Splices (HeistT n m Template)
 resourceSplices r@Resource{..} =
-  map (mkResourceActionSplice r) rResourceEndpoints ++
-  [ (T.concat [rName, "NewPath"], I.textSplice $ newPath r)
-  , (T.concat [rName, "IndexPath"], I.textSplice $ indexPath r)
-  , (T.concat [rName, "CreatePath"], I.textSplice $ createPath r)
-  , (T.concat [rName, "Path"], I.textSplice $ rootPath r)
-  ]
+    sequence_ (map (mkResourceActionSplice r) rResourceEndpoints) `mappend` a
+  where
+    a = do
+        T.concat [rName, "NewPath"] ## I.textSplice $ newPath r
+        T.concat [rName, "IndexPath"] ## I.textSplice $ indexPath r
+        T.concat [rName, "CreatePath"] ## I.textSplice $ createPath r
+        T.concat [rName, "Path"] ## I.textSplice $ rootPath r
+   
 
 
 ------------------------------------------------------------------------------
 -- | Generates path splices for a resource item.  These splices let you put
 -- resource links in your templates in DRY manner.
-itemSplices :: Monad m => Resource -> DBId -> [(Text, I.Splice m)]
+itemSplices :: Monad m => Resource -> DBId -> Splices (I.Splice m)
 itemSplices r@Resource{..} dbid =
-  map (mkItemActionSplice r dbid) rItemEndpoints ++
-  [ (T.concat [rName, "ItemEditPath"], I.textSplice $ editPath r dbid)
-  , (T.concat [rName, "ItemShowPath"], I.textSplice $ showPath r dbid)
-  , (T.concat [rName, "ItemUpdatePath"], I.textSplice $ updatePath r dbid)
-  , (T.concat [rName, "ItemDestroyPath"], I.textSplice $ destroyPath r dbid)
-  , (T.concat [rName, "ItemNewPath"], I.textSplice $ newPath r)
-  , (T.concat [rName, "ItemIndexPath"], I.textSplice $ indexPath r)
-  , (T.concat [rName, "ItemCreatePath"], I.textSplice $ createPath r)
-  ]
+    sequence_ (map (mkItemActionSplice r dbid) rItemEndpoints) `mappend` a
+  where
+    a = do
+        T.concat [rName, "ItemEditPath"] ## I.textSplice $ editPath r dbid
+        T.concat [rName, "ItemShowPath"] ## I.textSplice $ showPath r dbid
+        T.concat [rName, "ItemUpdatePath"] ## I.textSplice $ updatePath r dbid
+        T.concat [rName, "ItemDestroyPath"] ## I.textSplice $ destroyPath r dbid
+        T.concat [rName, "ItemNewPath"] ## I.textSplice $ newPath r
+        T.concat [rName, "ItemIndexPath"] ## I.textSplice $ indexPath r
+        T.concat [rName, "ItemCreatePath"] ## I.textSplice $ createPath r
 
 
 -------------------------------------------------------------------------------
 -- | Returns compiled splices for a resource.
-resourceCSplices :: MonadSnap m => Resource -> [(Text, C.Splice m)]
-resourceCSplices r = C.mapSnd (C.runNodeList =<<) $ resourceSplices r
+resourceCSplices :: MonadSnap m => Resource -> Splices (C.Splice m)
+resourceCSplices r = mapS (C.runNodeList =<<) $ resourceSplices r
 
 
 ------------------------------------------------------------------------------
 -- | Generates compiled path splices for a resource item.  These splices let
 -- you put resource links in your templates in DRY manner.
-itemCSplices :: Resource
-             -> [(Text, DBId -> Text)]
-itemCSplices r@Resource{..} =
-    [ (T.concat [rName, "ItemEditPath"], editPath r)
-    , (T.concat [rName, "ItemShowPath"], showPath r)
-    , (T.concat [rName, "ItemUpdatePath"], updatePath r)
-    , (T.concat [rName, "ItemDestroyPath"], destroyPath r)
-    ] ++
-    C.mapSnd const
-      [ (T.concat [rName, "ItemNewPath"], newPath r)
-      , (T.concat [rName, "ItemIndexPath"], indexPath r)
-      , (T.concat [rName, "ItemCreatePath"], createPath r)
-      ] ++
-    map (mkItemActionCSplice r) rItemEndpoints
+itemCSplices :: Resource -> Splices (DBId -> Text)
+itemCSplices r@Resource{..} = a `mappend` b `mappend` c
+  where
+    a = do
+        T.concat [rName, "ItemEditPath"] ## editPath r
+        T.concat [rName, "ItemShowPath"] ## showPath r
+        T.concat [rName, "ItemUpdatePath"] ## updatePath r
+        T.concat [rName, "ItemDestroyPath"] ## destroyPath r
+    b = mapS const $ do
+      T.concat [rName, "ItemNewPath"] ## newPath r
+      T.concat [rName, "ItemIndexPath"] ## indexPath r
+      T.concat [rName, "ItemCreatePath"] ## createPath r
+    c = sequence_ $ map (mkItemActionCSplice r) rItemEndpoints
 
 
 -------------------------------------------------------------------------------
 -- | Splices to generate links for resource item actions.
 mkItemActionSplice :: Monad m
-                   => Resource -> DBId -> Text -> (Text, I.Splice m)
+                   => Resource -> DBId -> Text -> Splices (I.Splice m)
 mkItemActionSplice r@Resource{..} dbid t =
-  ( T.concat [rName, "Item", cap t, "Path"]
-  , I.textSplice $ itemActionPath r t dbid)
+    T.concat [rName, "Item", cap t, "Path"] ## I.textSplice $ itemActionPath r t dbid
 
 
 -------------------------------------------------------------------------------
 -- | Compiled splices to generate links for resource actions.
-mkResourceActionSplice :: Monad m => Resource -> Text -> (Text, HeistT n m Template)
+mkResourceActionSplice :: Monad m => Resource -> Text -> Splices (HeistT n m Template)
 mkResourceActionSplice r@Resource{..} t =
-  ( T.concat [rName, cap t, "Path"]
-  , I.textSplice $ resourceActionPath r t)
+    T.concat [rName, cap t, "Path"] ## I.textSplice $ resourceActionPath r t
 
 
 -------------------------------------------------------------------------------
 -- | Compiled splices to generate links for resource item actions.
-mkItemActionCSplice :: Resource -> Text -> (Text, DBId -> Text)
+mkItemActionCSplice :: Resource -> Text -> Splices (DBId -> Text)
 mkItemActionCSplice r@Resource{..} t =
-  ( T.concat [rName, "Item", cap t, "Path"]
-  , itemActionPath r t)
+  T.concat [rName, "Item", cap t, "Path"] ## itemActionPath r t
 
 
 ------------------------------------------------------------------------------
