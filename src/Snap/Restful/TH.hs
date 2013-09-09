@@ -84,11 +84,12 @@ iSplices n = do
     case cons of
       [RecC conName fields] -> do
         param <- newName "x"
-        let fieldToTuple (fn,_,_) = do
+        let fieldToSplice (fn,_,_) = do
               f <- [| iPrimSplice $ $(appE (varE fn) (varE param)) |]
-              return $ TupE [LitE $ StringL $ nameBase fn, f]
-        fs <- mapM fieldToTuple fields
-        return $ LamE [VarP param] (ListE fs)
+--              return $ TupE [LitE $ StringL $ nameBase fn, f]
+              return $ NoBindS $ UInfixE (LitE $ StringL $ nameBase fn) (VarE $ mkName "##") f
+        fs <- mapM fieldToSplice fields
+        return $ LamE [VarP param] (DoE fs)
       _ -> error "You can only generate splices for a data type with a single constructor and named record fields"
 
 
@@ -104,11 +105,12 @@ cSplices n = do
     cons <- nameCons n
     case cons of
       [RecC conName fields] -> do
-        let fieldToTuple (fn,_,_) = do
+        let fieldToSplice (fn,_,_) = do
               f <- [| cPrimSplice . $(varE fn) |]
-              return $ TupE [LitE $ StringL $ nameBase fn, f]
-        fs <- mapM fieldToTuple fields
-        return $ ListE fs
+--              return $ TupE [LitE $ StringL $ nameBase fn, f]
+              return $ NoBindS $ UInfixE (LitE $ StringL $ nameBase fn) (VarE $ mkName "##") f
+        fs <- mapM fieldToSplice fields
+        return $ DoE fs
       _ -> error "You can only generate splices for a data type with a single constructor and named record fields"
 
 
