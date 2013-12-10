@@ -53,7 +53,13 @@ module Snap.Restful
     , relativeRedirect
     , setFormAction
     , getFormAction
+
+    -- * Date/time formlets
     , simpleDateFormlet
+    , utcTimeFormlet
+    , localTimeFormlet
+    , dateFormlet
+    , timeFormlet
     ) where
 
 ------------------------------------------------------------------------------
@@ -563,11 +569,65 @@ dayText = T.pack . formatTime defaultTimeLocale "%F"
 
 
 ------------------------------------------------------------------------------
+--                            Date/time formlets
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
 -- | A simple formlet for dates that
 simpleDateFormlet :: (Monad m)
                   => Maybe Day -> Form Text m Day
 simpleDateFormlet d = validate validDate $
     text (dayText <$> d)
+
+
+utcTimeFormlet :: Monad m
+               => String
+                 -- ^ Date format string
+               -> String
+                 -- ^ Time format string
+               -> TimeZone
+               -> Formlet Text m UTCTime
+utcTimeFormlet dFmt tFmt tz d =
+    localTimeToUTC tz <$> localTimeFormlet dFmt tFmt (utcToLocalTime tz <$> d)
+
+
+localTimeFormlet :: Monad m
+                 => String
+                   -- ^ Date format string
+                 -> String
+                   -- ^ Time format string
+                 -> Formlet Text m LocalTime
+localTimeFormlet dFmt tFmt d = LocalTime
+      <$> "date" .: dateFormlet dFmt (localDay <$> d)
+      <*> "time" .: timeFormlet tFmt (localTimeOfDay <$> d)
+
+
+dateFormlet :: Monad m
+            => String
+              -- ^ Format string
+            -> Formlet Text m Day
+dateFormlet fmt d =
+    validate vFunc (string $ formatTime defaultTimeLocale fmt <$> d)
+  where
+    vFunc = maybe (Error "invalid date") Success .
+            parseTime defaultTimeLocale fmt
+
+
+timeFormlet :: Monad m
+            => String
+              -- ^ Format string
+            -> Formlet Text m TimeOfDay
+timeFormlet fmt d =
+    validate vFunc (string $ formatTime defaultTimeLocale fmt <$> d)
+  where
+    vFunc = maybe (Error "invalid time") Success .
+            parseTime defaultTimeLocale fmt
+
+
+------------------------------------------------------------------------------
+--                                 Splices
+------------------------------------------------------------------------------
 
 
 ------------------------------------------------------------------------------
