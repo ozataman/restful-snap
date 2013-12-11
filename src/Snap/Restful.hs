@@ -60,6 +60,10 @@ module Snap.Restful
     , localTimeFormlet
     , dateFormlet
     , timeFormlet
+    , optionalUtcTimeFormlet
+    , optionalLocalTimeFormlet
+    , optionalDateFormlet
+    , optionalTimeFormlet
     ) where
 
 ------------------------------------------------------------------------------
@@ -94,6 +98,7 @@ import           Snap.Snaplet
 import           Snap.Snaplet.Heist
 import           System.Locale
 import           Text.Digestive
+import           Text.Digestive.Util
 import qualified Text.XmlHtml                   as X
 ------------------------------------------------------------------------------
 
@@ -608,10 +613,7 @@ dateFormlet :: Monad m
               -- ^ Format string
             -> Formlet Text m Day
 dateFormlet fmt d =
-    validate vFunc (string $ formatTime defaultTimeLocale fmt <$> d)
-  where
-    vFunc = maybe (Error "invalid date") Success .
-            parseTime defaultTimeLocale fmt
+    validate (vFunc fmt "invalid date") (string $ formatTime defaultTimeLocale fmt <$> d)
 
 
 timeFormlet :: Monad m
@@ -619,10 +621,60 @@ timeFormlet :: Monad m
               -- ^ Format string
             -> Formlet Text m TimeOfDay
 timeFormlet fmt d =
-    validate vFunc (string $ formatTime defaultTimeLocale fmt <$> d)
-  where
-    vFunc = maybe (Error "invalid time") Success .
-            parseTime defaultTimeLocale fmt
+    validate (vFunc fmt "invalid time") (string $ formatTime defaultTimeLocale fmt <$> d)
+
+
+optionalUtcTimeFormlet :: Monad m
+                       => String
+                         -- ^ Date format string
+                       -> String
+                         -- ^ Time format string
+                       -> TimeZone
+                       -> Maybe UTCTime
+                       -> Form Text m (Maybe UTCTime)
+optionalUtcTimeFormlet dFmt tFmt tz d =
+    liftM (localTimeToUTC tz) <$> optionalLocalTimeFormlet dFmt tFmt (utcToLocalTime tz <$> d)
+
+
+optionalLocalTimeFormlet :: Monad m
+                         => String
+                           -- ^ Date format string
+                         -> String
+                           -- ^ Time format string
+                         -> Maybe LocalTime
+                         -> Form Text m (Maybe LocalTime)
+optionalLocalTimeFormlet dFmt tFmt d = liftM2 LocalTime
+      <$> "date" .: optionalDateFormlet dFmt (localDay <$> d)
+      <*> "time" .: optionalTimeFormlet tFmt (localTimeOfDay <$> d)
+
+
+optionalDateFormlet :: Monad m
+                    => String
+                      -- ^ Format string
+                    -> Maybe Day
+                    -> Form Text m (Maybe Day)
+optionalDateFormlet fmt d =
+    validate (opt $ vFunc fmt "invalid date") (string $ formatTime defaultTimeLocale fmt <$> d)
+
+
+optionalTimeFormlet :: Monad m
+                    => String
+                      -- ^ Format string
+                    -> Maybe TimeOfDay
+                    -> Form Text m (Maybe TimeOfDay)
+optionalTimeFormlet fmt d =
+    validate (opt $ vFunc fmt "invalid time") (string $ formatTime defaultTimeLocale fmt <$> d)
+
+
+vFunc :: ParseTime a => String -> Text -> String -> Result Text a
+vFunc fmt err x
+  | length x < 40 = maybe (Error err) Success $ parseTime defaultTimeLocale fmt x
+  | otherwise = Error "Not a valid date/time string"
+
+
+opt :: (String -> Result v a) -> String -> Result v (Maybe a)
+opt _ "" = Success Nothing
+opt f x  = Just <$> f x
 
 
 ------------------------------------------------------------------------------
