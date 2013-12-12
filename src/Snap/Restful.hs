@@ -20,6 +20,7 @@ module Snap.Restful
     , itemSplices
     , resourceCSplices
     , itemCSplices
+    , itemCSplice
     , unitLens
     , resourceRouter
     , resourceRoutes
@@ -54,16 +55,6 @@ module Snap.Restful
     , setFormAction
     , getFormAction
 
-    -- * Date/time formlets
-    , simpleDateFormlet
-    , utcTimeFormlet
-    , localTimeFormlet
-    , dateFormlet
-    , timeFormlet
-    , optionalUtcTimeFormlet
-    , optionalLocalTimeFormlet
-    , optionalDateFormlet
-    , optionalTimeFormlet
     ) where
 
 ------------------------------------------------------------------------------
@@ -472,19 +463,29 @@ resourceCSplices r = mapS (C.runNodeList =<<) $ resourceSplices r
 ------------------------------------------------------------------------------
 -- | Generates compiled path splices for a resource item.  These splices let
 -- you put resource links in your templates in DRY manner.
-itemCSplices :: Resource -> Splices (DBId -> Text)
+itemCSplices :: Resource -> Splices (Maybe DBId -> Text)
 itemCSplices r@Resource{..} = a `mappend` b `mappend` c
   where
     a = do
-        T.concat [rName, "ItemEditPath"] ## editPath r
-        T.concat [rName, "ItemShowPath"] ## showPath r
-        T.concat [rName, "ItemUpdatePath"] ## updatePath r
-        T.concat [rName, "ItemDestroyPath"] ## destroyPath r
+        T.concat [rName, "ItemEditPath"] ## maybe "" (editPath r)
+        T.concat [rName, "ItemShowPath"] ## maybe "" (showPath r)
+        T.concat [rName, "ItemUpdatePath"] ## maybe "" (updatePath r)
+        T.concat [rName, "ItemDestroyPath"] ## maybe "" (destroyPath r)
     b = mapS const $ do
       T.concat [rName, "ItemNewPath"] ## newPath r
       T.concat [rName, "ItemIndexPath"] ## indexPath r
       T.concat [rName, "ItemCreatePath"] ## createPath r
     c = sequence_ $ map (mkItemActionCSplice r) rItemEndpoints
+
+
+------------------------------------------------------------------------------
+-- | A splice that runs its children with all item splices for a resource.
+-- This function gets the id from the \"id\" param, which could have come in
+-- the request or might have been set up by a route capture string.
+itemCSplice r =
+    C.withSplices C.runChildren (mapS (C.pureSplice . C.textSplice) $ itemCSplices r) $ do
+        mid <- lift $ getParam "id"
+        return $ fromBS =<< mid
 
 
 -------------------------------------------------------------------------------
@@ -504,9 +505,9 @@ mkResourceActionSplice r@Resource{..} t =
 
 -------------------------------------------------------------------------------
 -- | Compiled splices to generate links for resource item actions.
-mkItemActionCSplice :: Resource -> Text -> Splices (DBId -> Text)
+mkItemActionCSplice :: Resource -> Text -> Splices (Maybe DBId -> Text)
 mkItemActionCSplice r@Resource{..} t =
-  T.concat [rName, "Item", cap t, "Path"] ## itemActionPath r t
+  T.concat [rName, "Item", cap t, "Path"] ## maybe mempty (itemActionPath r t)
 
 
 ------------------------------------------------------------------------------
@@ -571,110 +572,6 @@ validDate = maybe (Error "invalid date") Success .
 
 dayText :: Day -> Text
 dayText = T.pack . formatTime defaultTimeLocale "%F"
-
-
-------------------------------------------------------------------------------
---                            Date/time formlets
-------------------------------------------------------------------------------
-
-
-------------------------------------------------------------------------------
--- | A simple formlet for dates that
-simpleDateFormlet :: (Monad m)
-                  => Maybe Day -> Form Text m Day
-simpleDateFormlet d = validate validDate $
-    text (dayText <$> d)
-
-
-utcTimeFormlet :: Monad m
-               => String
-                 -- ^ Date format string
-               -> String
-                 -- ^ Time format string
-               -> TimeZone
-               -> Formlet Text m UTCTime
-utcTimeFormlet dFmt tFmt tz d =
-    localTimeToUTC tz <$> localTimeFormlet dFmt tFmt (utcToLocalTime tz <$> d)
-
-
-localTimeFormlet :: Monad m
-                 => String
-                   -- ^ Date format string
-                 -> String
-                   -- ^ Time format string
-                 -> Formlet Text m LocalTime
-localTimeFormlet dFmt tFmt d = LocalTime
-      <$> "date" .: dateFormlet dFmt (localDay <$> d)
-      <*> "time" .: timeFormlet tFmt (localTimeOfDay <$> d)
-
-
-dateFormlet :: Monad m
-            => String
-              -- ^ Format string
-            -> Formlet Text m Day
-dateFormlet fmt d =
-    validate (vFunc fmt "invalid date") (string $ formatTime defaultTimeLocale fmt <$> d)
-
-
-timeFormlet :: Monad m
-            => String
-              -- ^ Format string
-            -> Formlet Text m TimeOfDay
-timeFormlet fmt d =
-    validate (vFunc fmt "invalid time") (string $ formatTime defaultTimeLocale fmt <$> d)
-
-
-optionalUtcTimeFormlet :: Monad m
-                       => String
-                         -- ^ Date format string
-                       -> String
-                         -- ^ Time format string
-                       -> TimeZone
-                       -> Maybe UTCTime
-                       -> Form Text m (Maybe UTCTime)
-optionalUtcTimeFormlet dFmt tFmt tz d =
-    liftM (localTimeToUTC tz) <$> optionalLocalTimeFormlet dFmt tFmt (utcToLocalTime tz <$> d)
-
-
-optionalLocalTimeFormlet :: Monad m
-                         => String
-                           -- ^ Date format string
-                         -> String
-                           -- ^ Time format string
-                         -> Maybe LocalTime
-                         -> Form Text m (Maybe LocalTime)
-optionalLocalTimeFormlet dFmt tFmt d = liftM2 LocalTime
-      <$> "date" .: optionalDateFormlet dFmt (localDay <$> d)
-      <*> "time" .: optionalTimeFormlet tFmt (localTimeOfDay <$> d)
-
-
-optionalDateFormlet :: Monad m
-                    => String
-                      -- ^ Format string
-                    -> Maybe Day
-                    -> Form Text m (Maybe Day)
-optionalDateFormlet fmt d =
-    validate (opt $ vFunc fmt "invalid date") (string $ formatTime defaultTimeLocale fmt <$> d)
-
-
-optionalTimeFormlet :: Monad m
-                    => String
-                      -- ^ Format string
-                    -> Maybe TimeOfDay
-                    -> Form Text m (Maybe TimeOfDay)
-optionalTimeFormlet fmt d =
-    validate (opt $ vFunc fmt "invalid time") (string $ formatTime defaultTimeLocale fmt <$> d)
-
-
-vFunc :: ParseTime a => String -> Text -> String -> Result Text a
-vFunc fmt err x
-  | length x < 40 = maybe (Error err) Success $ parseTime defaultTimeLocale fmt x
-  | otherwise = Error "Not a valid date/time string"
-
-
-opt :: (String -> Result v a) -> String -> Result v (Maybe a)
-opt _ "" = Success Nothing
-opt f x  = Just <$> f x
 
 
 ------------------------------------------------------------------------------
