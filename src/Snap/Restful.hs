@@ -89,7 +89,7 @@ import           Snap.Snaplet
 import           Snap.Snaplet.Heist
 import           System.Locale
 import           Text.Digestive
-import           Text.Digestive.Util
+
 import qualified Text.XmlHtml                   as X
 ------------------------------------------------------------------------------
 
@@ -408,7 +408,7 @@ destroyPath r (DBId _id) = mkPath [rRoot r, showT _id, "destroy"]
 
 
 ------------------------------------------------------------------------------
--- | Sets the @RESTFormAction@ param. 
+-- | Sets the @RESTFormAction@ param.
 setFormAction :: MonadSnap m => Text -> m a -> m a
 setFormAction a = localRequest f
   where
@@ -416,7 +416,7 @@ setFormAction a = localRequest f
                                       (rqParams req) }
 
 ------------------------------------------------------------------------------
--- | Gets the @RESTFormAction@ param. 
+-- | Gets the @RESTFormAction@ param.
 getFormAction :: MonadSnap m => HeistT n m [X.Node]
 getFormAction = do
     p <- lift $ getParam "RESTFormAction"
@@ -434,7 +434,7 @@ resourceSplices r@Resource{..} =
         T.concat [rName, "IndexPath"] ## I.textSplice $ indexPath r
         T.concat [rName, "CreatePath"] ## I.textSplice $ createPath r
         T.concat [rName, "Path"] ## I.textSplice $ rootPath r
-   
+
 
 
 ------------------------------------------------------------------------------
@@ -548,6 +548,8 @@ instance HasFormlet Float where formlet = stringRead "must be a float"
 instance HasFormlet Double where formlet = stringRead "must be a double"
 instance HasFormlet Bool where formlet = bool
 
+instance HasFormlet ByteString where
+    formlet v = validate (Success . T.encodeUtf8) $ text (T.decodeUtf8 <$> v)
 instance HasFormlet Int8 where
     formlet = stringRead "must be an integer"
 instance HasFormlet Int16 where
