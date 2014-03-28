@@ -62,7 +62,7 @@ import           Blaze.ByteString.Builder
 import qualified Blaze.ByteString.Builder.Char8 as Build
 import           Control.Applicative
 import           Control.Arrow
-import           Control.Error
+import           Control.Error                  hiding (bool)
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Trans
