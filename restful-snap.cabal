@@ -18,18 +18,18 @@ source-repository head
 library
   hs-source-dirs: src
 
-  exposed-modules: 
+  exposed-modules:
     Snap.Restful
     Snap.Restful.TH
 
-  build-depends:       
+  build-depends:
     base               >= 4    && < 5,
     blaze-builder      >= 0.3  && < 0.4,
     bytestring         >= 0.8  && < 0.11,
     containers         >= 0.4  && < 0.6,
     data-default       >= 0.5  && < 0.6,
     digestive-functors >= 0.6  && < 0.8,
-    heist              >= 0.13 && < 0.14,
+    heist              >= 0.14 && < 0.15,
     lens               >= 3.8  && < 4.4,
     mtl                >= 2.0  && < 2.3,
     old-locale         >= 1.0  && < 1.1,

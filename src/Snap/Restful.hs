@@ -80,7 +80,7 @@ import qualified Data.Text.Encoding             as T
 import           Data.Time
 import           Data.Typeable
 import           Data.Word
-import           Heist
+import           Heist                          hiding (Error)
 import qualified Heist.Compiled                 as C
 import qualified Heist.Interpreted              as I
 import           Snap.Core
@@ -244,8 +244,8 @@ addResource' :: (Resource -> r -> s -> t -> [(ByteString, Handler b v ())])
              -> Initializer b v ()
 addResource' f res rHandlers rResourceActions rItemActions h = do
     addRoutes $ f res rHandlers rResourceActions rItemActions
-    addConfig h mempty { hcInterpretedSplices = resourceSplices res
-                       , hcCompiledSplices = resourceCSplices res }
+    addConfig h $ mempty & scInterpretedSplices .~ resourceSplices res
+                         & scCompiledSplices .~ resourceCSplices res
 
 
 ------------------------------------------------------------------------------
