@@ -457,7 +457,7 @@ itemSplices r@Resource{..} dbid =
 -------------------------------------------------------------------------------
 -- | Returns compiled splices for a resource.
 resourceCSplices :: MonadSnap m => Resource -> Splices (C.Splice m)
-resourceCSplices r = mapS (C.runNodeList =<<) $ resourceSplices r
+resourceCSplices r = mapV (C.runNodeList =<<) $ resourceSplices r
 
 
 ------------------------------------------------------------------------------
@@ -471,7 +471,7 @@ itemCSplices r@Resource{..} = a `mappend` b `mappend` c
         T.concat [rName, "ItemShowPath"] ## maybe "" (showPath r)
         T.concat [rName, "ItemUpdatePath"] ## maybe "" (updatePath r)
         T.concat [rName, "ItemDestroyPath"] ## maybe "" (destroyPath r)
-    b = mapS const $ do
+    b = mapV const $ do
       T.concat [rName, "ItemNewPath"] ## newPath r
       T.concat [rName, "ItemIndexPath"] ## indexPath r
       T.concat [rName, "ItemCreatePath"] ## createPath r
@@ -483,7 +483,7 @@ itemCSplices r@Resource{..} = a `mappend` b `mappend` c
 -- This function gets the id from the \"id\" param, which could have come in
 -- the request or might have been set up by a route capture string.
 itemCSplice r =
-    C.withSplices C.runChildren (mapS (C.pureSplice . C.textSplice) $ itemCSplices r) $ do
+    C.withSplices C.runChildren (mapV (C.pureSplice . C.textSplice) $ itemCSplices r) $ do
         mid <- lift $ getParam "id"
         return $ fromBS =<< mid
 
