@@ -29,6 +29,7 @@ library
     containers         >= 0.4  && < 0.6,
     data-default       >= 0.5  && < 0.6,
     digestive-functors >= 0.6  && < 0.8,
+    errors,
     heist              >= 0.14 && < 0.15,
     lens               >= 3.8  && < 4.4,
     mtl                >= 2.0  && < 2.3,
@@ -37,10 +38,9 @@ library
     snap               >= 0.11 && < 0.14,
     snap-core          >= 0.9  && < 0.10,
     snap-extras        >= 0.11  && < 0.12,
-    template-haskell   >= 2.4  && < 2.9,
-    text               >= 0.11 && < 1.2,
-    time               >= 1.4  && < 1.5,
-    xmlhtml            >= 0.2  && < 0.3,
-    errors
+    template-haskell   >= 2.4  && < 2.10,
+    text               >= 0.11 && < 1.3,
+    time               >= 1.4  && < 1.6,
+    xmlhtml            >= 0.2  && < 0.3
 
   ghc-options: -Wall -fwarn-tabs
