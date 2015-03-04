@@ -31,7 +31,7 @@ library
     digestive-functors >= 0.6  && < 0.8,
     errors,
     heist              >= 0.14 && < 0.15,
-    lens               >= 3.8  && < 4.4,
+    lens               >= 3.8  && < 4.8,
     mtl                >= 2.0  && < 2.3,
     old-locale         >= 1.0  && < 1.1,
     readable           >= 0.1  && < 0.4,
