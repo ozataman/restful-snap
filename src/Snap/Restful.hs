@@ -78,6 +78,7 @@ import           Data.Text                      (Text)
 import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as T
 import           Data.Time
+import qualified Data.Time.Locale.Compat        as LC
 import           Data.Typeable
 import           Data.Word
 import           Heist                          hiding (Error)
@@ -89,7 +90,6 @@ import           Snap.Snaplet
 import           Snap.Snaplet.Heist
 import           System.Locale
 import           Text.Digestive
-
 import qualified Text.XmlHtml                   as X
 ------------------------------------------------------------------------------
 
@@ -569,11 +569,11 @@ instance HasFormlet Word64 where
 
 validDate :: Text -> Result Text Day
 validDate = maybe (Error "invalid date") Success .
-              parseTime defaultTimeLocale "%F" . T.unpack
+              parseTime LC.defaultTimeLocale "%F" . T.unpack
 
 
 dayText :: Day -> Text
-dayText = T.pack . formatTime defaultTimeLocale "%F"
+dayText = T.pack . formatTime LC.defaultTimeLocale "%F"
 
 
 ------------------------------------------------------------------------------
