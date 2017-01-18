@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE FlexibleInstances          #-}
@@ -30,24 +31,29 @@ nameCons n = do
     info <- reify n
     case info of
       TyConI dec -> decCons dec
-      _ -> return []
+      _          -> return []
 
 
 ------------------------------------------------------------------------------
 -- | Gets a list of constructors for a Dec.
 decCons :: Dec -> Q [Con]
-decCons (DataD _ _ _ cons _) = return cons
+#if MIN_VERSION_template_haskell(0, 11, 0)
+decCons (DataD _ _ _ _ cons _)   = return cons
+decCons (NewtypeD _ _ _ _ con _) = return [con]
+#else
+decCons (DataD _ _ _ cons _)   = return cons
 decCons (NewtypeD _ _ _ con _) = return [con]
-decCons (TySynD _ _ t) = typeCons t
-decCons _ = return []
+#endif
+decCons (TySynD _ _ t)         = typeCons t
+decCons _                      = return []
 
 
 ------------------------------------------------------------------------------
 -- | Gets a list of constructors for a Type.
 typeCons :: Type -> Q [Con]
 typeCons (AppT a _) = typeCons a
-typeCons (ConT n) = nameCons n
-typeCons _ = return []
+typeCons (ConT n)   = nameCons n
+typeCons _          = return []
 
 
 ------------------------------------------------------------------------------
@@ -66,7 +72,11 @@ deriveHasFormlet n = do
             splat = VarE '(<*>)
             res = foldl (\a b -> UInfixE a splat b) start fs
             func = [FunD 'formlet [Clause [VarP defName] (NormalB res) []]]
+#if MIN_VERSION_template_haskell(0, 11, 0)
+        return $ [InstanceD Nothing [] (AppT (ConT ''HasFormlet) (ConT n)) func]
+#else
         return $ [InstanceD [] (AppT (ConT ''HasFormlet) (ConT n)) func]
+#endif
       _ -> error "You can only generate formlets for a data type with a single constructor and named record fields"
 
 

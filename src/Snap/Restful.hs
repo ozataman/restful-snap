@@ -72,6 +72,7 @@ import           Data.Char                      (toUpper)
 import           Data.Default
 import           Data.Int
 import qualified Data.Map                       as M
+import qualified Data.Map.Syntax                as MS
 import           Data.Monoid
 import           Data.Readable
 import           Data.Text                      (Text)
@@ -337,12 +338,12 @@ mkCrudRoute r@Resource{..} (crud, h) =
 templatePath :: Resource -> CRUD -> ByteString
 templatePath Resource{..} crud =
     case crud of
-      RIndex -> mkPathB [r, "index"]
-      RCreate -> error "Create action does not get a template."
-      RShow -> mkPathB [r, "show"]
-      RNew -> mkPathB [r, "new"]
-      REdit -> mkPathB [r, "edit"]
-      RUpdate -> error "Update action does not get a template."
+      RIndex   -> mkPathB [r, "index"]
+      RCreate  -> error "Create action does not get a template."
+      RShow    -> mkPathB [r, "show"]
+      RNew     -> mkPathB [r, "new"]
+      REdit    -> mkPathB [r, "edit"]
+      RUpdate  -> error "Update action does not get a template."
       RDestroy -> error "Destroy action does not get a template."
   where
     r = T.encodeUtf8 rRoot
@@ -430,10 +431,10 @@ resourceSplices r@Resource{..} =
     sequence_ (map (mkResourceActionSplice r) rResourceEndpoints) `mappend` a
   where
     a = do
-        T.concat [rName, "NewPath"] ## I.textSplice $ newPath r
-        T.concat [rName, "IndexPath"] ## I.textSplice $ indexPath r
-        T.concat [rName, "CreatePath"] ## I.textSplice $ createPath r
-        T.concat [rName, "Path"] ## I.textSplice $ rootPath r
+        T.concat [rName, "NewPath"] MS.## I.textSplice $ newPath r
+        T.concat [rName, "IndexPath"] MS.## I.textSplice $ indexPath r
+        T.concat [rName, "CreatePath"] MS.## I.textSplice $ createPath r
+        T.concat [rName, "Path"] MS.## I.textSplice $ rootPath r
 
 
 
@@ -445,19 +446,19 @@ itemSplices r@Resource{..} dbid =
     sequence_ (map (mkItemActionSplice r dbid) rItemEndpoints) `mappend` a
   where
     a = do
-        T.concat [rName, "ItemEditPath"] ## I.textSplice $ editPath r dbid
-        T.concat [rName, "ItemShowPath"] ## I.textSplice $ showPath r dbid
-        T.concat [rName, "ItemUpdatePath"] ## I.textSplice $ updatePath r dbid
-        T.concat [rName, "ItemDestroyPath"] ## I.textSplice $ destroyPath r dbid
-        T.concat [rName, "ItemNewPath"] ## I.textSplice $ newPath r
-        T.concat [rName, "ItemIndexPath"] ## I.textSplice $ indexPath r
-        T.concat [rName, "ItemCreatePath"] ## I.textSplice $ createPath r
+        T.concat [rName, "ItemEditPath"] MS.## I.textSplice $ editPath r dbid
+        T.concat [rName, "ItemShowPath"] MS.## I.textSplice $ showPath r dbid
+        T.concat [rName, "ItemUpdatePath"] MS.## I.textSplice $ updatePath r dbid
+        T.concat [rName, "ItemDestroyPath"] MS.## I.textSplice $ destroyPath r dbid
+        T.concat [rName, "ItemNewPath"] MS.## I.textSplice $ newPath r
+        T.concat [rName, "ItemIndexPath"] MS.## I.textSplice $ indexPath r
+        T.concat [rName, "ItemCreatePath"] MS.## I.textSplice $ createPath r
 
 
 -------------------------------------------------------------------------------
 -- | Returns compiled splices for a resource.
 resourceCSplices :: MonadSnap m => Resource -> Splices (C.Splice m)
-resourceCSplices r = mapV (C.runNodeList =<<) $ resourceSplices r
+resourceCSplices r = MS.mapV (C.runNodeList =<<) $ resourceSplices r
 
 
 ------------------------------------------------------------------------------
@@ -467,14 +468,14 @@ itemCSplices :: Resource -> Splices (Maybe DBId -> Text)
 itemCSplices r@Resource{..} = a `mappend` b `mappend` c
   where
     a = do
-        T.concat [rName, "ItemEditPath"] ## maybe "" (editPath r)
-        T.concat [rName, "ItemShowPath"] ## maybe "" (showPath r)
-        T.concat [rName, "ItemUpdatePath"] ## maybe "" (updatePath r)
-        T.concat [rName, "ItemDestroyPath"] ## maybe "" (destroyPath r)
-    b = mapV const $ do
-      T.concat [rName, "ItemNewPath"] ## newPath r
-      T.concat [rName, "ItemIndexPath"] ## indexPath r
-      T.concat [rName, "ItemCreatePath"] ## createPath r
+        T.concat [rName, "ItemEditPath"] MS.## maybe "" (editPath r)
+        T.concat [rName, "ItemShowPath"] MS.## maybe "" (showPath r)
+        T.concat [rName, "ItemUpdatePath"] MS.## maybe "" (updatePath r)
+        T.concat [rName, "ItemDestroyPath"] MS.## maybe "" (destroyPath r)
+    b = MS.mapV const $ do
+      T.concat [rName, "ItemNewPath"] MS.## newPath r
+      T.concat [rName, "ItemIndexPath"] MS.## indexPath r
+      T.concat [rName, "ItemCreatePath"] MS.## createPath r
     c = sequence_ $ map (mkItemActionCSplice r) rItemEndpoints
 
 
@@ -483,7 +484,7 @@ itemCSplices r@Resource{..} = a `mappend` b `mappend` c
 -- This function gets the id from the \"id\" param, which could have come in
 -- the request or might have been set up by a route capture string.
 itemCSplice r =
-    C.withSplices C.runChildren (mapV (C.pureSplice . C.textSplice) $ itemCSplices r) $ do
+    C.withSplices C.runChildren (MS.mapV (C.pureSplice . C.textSplice) $ itemCSplices r) $ do
         mid <- lift $ getParam "id"
         return $ fromBS =<< mid
 
@@ -493,21 +494,21 @@ itemCSplice r =
 mkItemActionSplice :: Monad m
                    => Resource -> DBId -> Text -> Splices (I.Splice m)
 mkItemActionSplice r@Resource{..} dbid t =
-    T.concat [rName, "Item", cap t, "Path"] ## I.textSplice $ itemActionPath r t dbid
+    T.concat [rName, "Item", cap t, "Path"] MS.## I.textSplice $ itemActionPath r t dbid
 
 
 -------------------------------------------------------------------------------
 -- | Compiled splices to generate links for resource actions.
 mkResourceActionSplice :: Monad m => Resource -> Text -> Splices (HeistT n m Template)
 mkResourceActionSplice r@Resource{..} t =
-    T.concat [rName, cap t, "Path"] ## I.textSplice $ resourceActionPath r t
+    T.concat [rName, cap t, "Path"] MS.## I.textSplice $ resourceActionPath r t
 
 
 -------------------------------------------------------------------------------
 -- | Compiled splices to generate links for resource item actions.
 mkItemActionCSplice :: Resource -> Text -> Splices (Maybe DBId -> Text)
 mkItemActionCSplice r@Resource{..} t =
-  T.concat [rName, "Item", cap t, "Path"] ## maybe mempty (itemActionPath r t)
+  T.concat [rName, "Item", cap t, "Path"] MS.## maybe mempty (itemActionPath r t)
 
 
 ------------------------------------------------------------------------------
@@ -526,7 +527,7 @@ cap :: Text -> Text
 cap t =
   case T.uncons t of
     Just (h, rest) -> T.cons (toUpper h) rest
-    Nothing -> t
+    Nothing        -> t
 
 
 relativeRedirect :: MonadSnap m => B.ByteString -> m b
