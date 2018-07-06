@@ -1,0 +1,14 @@
+resolver: lts-11.16
+packages:
+  - .
+extra-deps:
+  - digestive-functors-0.8.3.0
+  - snap-1.0.0.2
+  - snap-extras-0.12.1.1
+  - aeson-1.1.2.0
+  - digestive-functors-heist-0.8.8.0
+  - digestive-functors-snap-0.7.0.0
+  - lens-4.15.4
+  - time-1.6.0.1
+  - free-4.12.4
+
