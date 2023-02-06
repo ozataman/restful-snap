@@ -570,7 +570,7 @@ instance HasFormlet Word64 where
 
 validDate :: Text -> Result Text Day
 validDate = maybe (Error "invalid date") Success .
-              parseTime LC.defaultTimeLocale "%F" . T.unpack
+              parseTimeM True LC.defaultTimeLocale "%F" . T.unpack
 
 
 dayText :: Day -> Text
