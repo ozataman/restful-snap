@@ -99,7 +99,7 @@ iSplices n = do
 --              return $ TupE [LitE $ StringL $ nameBase fn, f]
               return $ NoBindS $ UInfixE (LitE $ StringL $ nameBase fn) (VarE $ mkName "##") f
         fs <- mapM fieldToSplice fields
-        return $ LamE [VarP param] (DoE fs)
+        return $ LamE [VarP param] (DoE Nothing fs)
       _ -> error "You can only generate splices for a data type with a single constructor and named record fields"
 
 
@@ -120,7 +120,7 @@ cSplices n = do
 --              return $ TupE [LitE $ StringL $ nameBase fn, f]
               return $ NoBindS $ UInfixE (LitE $ StringL $ nameBase fn) (VarE $ mkName "##") f
         fs <- mapM fieldToSplice fields
-        return $ DoE fs
+        return $ DoE Nothing fs
       _ -> error "You can only generate splices for a data type with a single constructor and named record fields"
 
 
